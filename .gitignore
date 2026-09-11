@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# C/C++ build artifacts
+build/
+*.o
+*.out
+*.a
+*.so
+
+# Logs
+*.log
+
+# Secrets
+.env
+*.key
+*.pem
+
+# OS/editor files
+.DS_Store
