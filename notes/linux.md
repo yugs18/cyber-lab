@@ -127,3 +127,304 @@ Parent Process
 ### Important Principle
 
 > **Don't memorize commands in isolation. Understand what information they expose, why that information exists, and how that information could be useful during security investigation.**
+
+
+# Processes, File Descriptors & Sockets
+
+## Process Investigation
+
+A **process** is a running instance of a program.
+
+A process has:
+
+* PID — Process ID
+* PPID — Parent Process ID
+* UID/GID — User and group identity
+* Memory
+* Environment
+* File descriptors
+* Other kernel-managed resources
+
+Useful commands:
+
+```bash
+ps aux
+ps -ef
+ps -p <PID>
+ps -p <PID> -o pid,ppid,user,stat,cmd
+pstree -p <PID>
+```
+
+### Current shell process
+
+```bash
+echo $$
+```
+
+`$$` expands to the PID of the current shell.
+
+The process can then be inspected through:
+
+```bash
+ls -l /proc/$$
+cat /proc/$$/status
+```
+
+---
+
+# `/proc/<PID>`
+
+Linux exposes information about processes through the `/proc` pseudo-filesystem.
+
+Example:
+
+```bash
+ls -l /proc/<PID>
+```
+
+Useful entries:
+
+| Entry     | Meaning                                        |
+| --------- | ---------------------------------------------- |
+| `cwd`     | Process's current working directory            |
+| `exe`     | Executable being run                           |
+| `cmdline` | Command-line arguments                         |
+| `status`  | Process state, identity, memory, threads, etc. |
+| `environ` | Environment variables                          |
+| `fd/`     | File descriptors                               |
+| `maps`    | Process memory mappings                        |
+| `net/`    | Network-related information                    |
+| `ns/`     | Namespace information                          |
+
+`/proc` provides evidence about what a process is doing. It does not, by itself, prove that a process is malicious or vulnerable.
+
+---
+
+# File Descriptors
+
+A **file descriptor (FD)** is a small integer used by a process to refer to a resource managed by the kernel.
+
+Common descriptors:
+
+```text
+0 → stdin
+1 → stdout
+2 → stderr
+```
+
+Inspect a process's file descriptors:
+
+```bash
+ls -l /proc/<PID>/fd
+```
+
+Example:
+
+```text
+0 -> /dev/pts/1
+1 -> /dev/pts/1
+2 -> /dev/pts/1
+3 -> socket:[66597]
+```
+
+This means the process has:
+
+* FD 0 connected to its terminal for input
+* FD 1 connected to its terminal for normal output
+* FD 2 connected to its terminal for error output
+* FD 3 referring to a kernel socket
+
+### Important mental model
+
+```text
+Process
+   ↓
+File Descriptor
+   ↓
+Kernel-managed resource
+```
+
+The resource can be:
+
+* file
+* terminal
+* pipe
+* socket
+* device
+* other kernel object
+
+Linux uses the file-descriptor interface for many different types of resources.
+
+---
+
+# Pipes
+
+A pipe provides a mechanism for communication between processes.
+
+A pipe may appear in `/proc/<PID>/fd` as:
+
+```text
+pipe:[60985]
+```
+
+The number identifies the kernel pipe object.
+
+Pipes are commonly used for **inter-process communication (IPC)**.
+
+---
+
+# File Descriptor and Socket
+
+A network socket is represented to a process through a file descriptor.
+
+Example:
+
+```text
+FD 3 → socket:[66597]
+```
+
+This does not mean the socket is an ordinary file.
+
+Rather, the process uses FD 3 as its handle for communicating with the socket through the kernel.
+
+Mental model:
+
+```text
+Process
+   ↓
+FD 3
+   ↓
+Socket
+   ↓
+TCP/UDP networking
+```
+
+---
+
+# Finding Which Process Owns a Network Socket
+
+The `ss` command can show network sockets.
+
+```bash
+ss -tulpn
+```
+
+Important options:
+
+```text
+-t  TCP
+-u  UDP
+-l  listening sockets
+-n  don't resolve names
+-p  show owning process
+```
+
+Example:
+
+```text
+tcp LISTEN 0 5 127.0.0.1:8000 0.0.0.0:* users:(("python3",pid=6885,fd=3))
+```
+
+This tells us:
+
+```text
+Program  = python3
+PID      = 6885
+FD       = 3
+Protocol = TCP
+State    = LISTEN
+Address  = 127.0.0.1
+Port     = 8000
+```
+
+We can independently verify the FD:
+
+```bash
+ls -l /proc/6885/fd
+```
+
+which showed:
+
+```text
+3 -> socket:[66597]
+```
+
+This connects the process view and network view:
+
+```text
+python3
+   ↓
+PID 6885
+   ↓
+FD 3
+   ↓
+socket:[66597]
+   ↓
+TCP 127.0.0.1:8000
+```
+
+---
+
+# Security Perspective
+
+Process and socket investigation is important in security because it allows us to answer questions such as:
+
+* What processes are running?
+* Which user owns a process?
+* Which process owns a listening port?
+* Which network services are exposed?
+* Which file descriptors does a process have?
+* Is a suspicious process communicating over the network?
+* What resources does a process have access to?
+
+A listening port does **not automatically mean a vulnerability exists**.
+
+It tells us that a service is accepting or prepared to accept network connections and gives us something concrete to investigate.
+
+---
+
+# Localhost / Loopback
+
+`127.0.0.1` is the IPv4 loopback address.
+
+A service bound to:
+
+```text
+127.0.0.1:8000
+```
+
+is listening on the local machine's loopback interface.
+
+It is different from binding to an externally reachable interface such as:
+
+```text
+192.168.x.x:8000
+```
+
+This distinction matters when determining network exposure.
+
+---
+
+# Core Mental Model
+
+The key relationship learned in this session:
+
+```text
+Program
+   ↓
+Process
+   ↓
+PID
+   ↓
+File Descriptor
+   ↓
+Kernel Resource
+   ↓
+Socket
+   ↓
+Network Communication
+```
+
+A process does not directly manipulate the physical network.
+
+It interacts with a socket through a file descriptor, while the Linux kernel handles the underlying networking.

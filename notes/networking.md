@@ -612,3 +612,256 @@ A useful security mindset is:
 > Don't just trust the abstraction. Look at what is actually happening on the network.
 
 Tools such as Wireshark allow us to inspect that traffic directly.
+
+# Processes, Sockets & Listening Ports
+
+## Socket
+
+A **socket** is an operating-system abstraction used by programs for network communication.
+
+A process accesses a socket through a file descriptor.
+
+```text
+Process
+   ↓
+File Descriptor
+   ↓
+Socket
+   ↓
+TCP/UDP
+   ↓
+IP
+   ↓
+Network Interface
+```
+
+A socket is not the same thing as:
+
+* an IP address
+* a port
+* a physical network connection
+
+These concepts work together.
+
+---
+
+# Port
+
+A port identifies a communication endpoint associated with a TCP or UDP service.
+
+Example:
+
+```text
+127.0.0.1:8000
+```
+
+Here:
+
+```text
+127.0.0.1 → IP address
+8000      → TCP port
+```
+
+The IP address identifies the network endpoint/interface address, while the port identifies the transport-layer service endpoint.
+
+---
+
+# Listening Socket
+
+A server normally creates a socket and puts it into a listening state.
+
+Example:
+
+```bash
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Then:
+
+```bash
+ss -tulpn | grep 8000
+```
+
+can show:
+
+```text
+tcp LISTEN 0 5 127.0.0.1:8000 0.0.0.0:* users:(("python3",pid=6885,fd=3))
+```
+
+Interpretation:
+
+```text
+TCP
+ ↓
+LISTEN
+ ↓
+127.0.0.1:8000
+ ↓
+owned by python3
+ ↓
+PID 6885
+ ↓
+FD 3
+```
+
+---
+
+# `ss`
+
+`ss` is a Linux utility for inspecting sockets.
+
+Common commands:
+
+```bash
+ss -tuln
+```
+
+Show listening TCP/UDP sockets without resolving names.
+
+```bash
+ss -tulpn
+```
+
+Additionally show the process owning the socket.
+
+Options:
+
+```text
+-t → TCP
+-u → UDP
+-l → listening
+-n → numeric output
+-p → process information
+```
+
+---
+
+# Process ↔ Socket Relationship
+
+A network service can be traced from the network side to the process side.
+
+For example:
+
+```text
+127.0.0.1:8000
+       ↓
+TCP listening socket
+       ↓
+python3
+       ↓
+PID 6885
+       ↓
+FD 3
+```
+
+The process's `/proc` directory can confirm the file descriptor:
+
+```bash
+ls -l /proc/6885/fd
+```
+
+Result:
+
+```text
+3 -> socket:[66597]
+```
+
+This gives two complementary views:
+
+### Network view
+
+```bash
+ss -tulpn
+```
+
+Answers:
+
+> Which process owns this network endpoint?
+
+### Process view
+
+```bash
+ls -l /proc/<PID>/fd
+```
+
+Answers:
+
+> What resources does this process have open?
+
+Together they provide a powerful way to investigate network activity.
+
+---
+
+# Loopback
+
+IPv4:
+
+```text
+127.0.0.1
+```
+
+is the loopback address.
+
+Traffic sent to `127.0.0.1` stays within the local machine.
+
+Example:
+
+```text
+127.0.0.1:8000
+```
+
+means the service is bound to the local machine's loopback interface.
+
+This is different from:
+
+```text
+192.168.x.x:8000
+```
+
+which may make the service reachable through the machine's network interface, depending on routing and firewall rules.
+
+---
+
+# Security Perspective
+
+When investigating a Linux system, an important question is:
+
+> Which processes are listening for network connections?
+
+A basic investigation can begin with:
+
+```bash
+ss -tulpn
+```
+
+Then identify the process:
+
+```bash
+ps -p <PID> -o pid,ppid,user,cmd
+```
+
+Then inspect its resources:
+
+```bash
+ls -l /proc/<PID>/fd
+```
+
+This creates a useful investigation chain:
+
+```text
+Network endpoint
+      ↓
+Socket
+      ↓
+Process
+      ↓
+PID
+      ↓
+User
+      ↓
+Process resources
+```
+
+This is foundational for later network reconnaissance, incident investigation, and security testing.
+
+A listening port alone does not establish that a service is vulnerable. It identifies an endpoint that can be investigated further.
