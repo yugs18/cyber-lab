@@ -865,3 +865,564 @@ Process resources
 This is foundational for later network reconnaissance, incident investigation, and security testing.
 
 A listening port alone does not establish that a service is vulnerable. It identifies an endpoint that can be investigated further.
+
+
+# TCP, UDP & Wireshark
+
+## TCP Connections
+
+TCP (Transmission Control Protocol) is a connection-oriented transport-layer protocol.
+
+TCP provides:
+
+* Reliable delivery
+* Ordered delivery
+* Retransmission of lost data
+* Error detection
+* A byte-stream abstraction
+* Connection state between endpoints
+
+A TCP connection can be viewed using its endpoints:
+
+```text
+Client IP : Client Port
+        ↕
+Server IP : Server Port
+```
+
+Example:
+
+```text
+127.0.0.1:45122
+       ↕
+127.0.0.1:8000
+```
+
+The server can continue listening on port `8000` while different clients use different ephemeral source ports.
+
+---
+
+## Listening Sockets
+
+A server normally creates a socket and puts it into a listening state.
+
+Example:
+
+```bash
+ss -tulpn | grep 8000
+```
+
+Example output:
+
+```text
+tcp   LISTEN   0   5   127.0.0.1:8000   0.0.0.0:*
+users:(("python3",pid=6885,fd=3))
+```
+
+Interpretation:
+
+```text
+Protocol: TCP
+State: LISTEN
+Server IP: 127.0.0.1
+Server Port: 8000
+Process: python3
+PID: 6885
+File Descriptor: 3
+```
+
+This connects the Linux and networking models:
+
+```text
+Process
+   ↓
+File Descriptor
+   ↓
+Socket
+   ↓
+TCP endpoint
+   ↓
+IP + Port
+```
+
+---
+
+## TCP Three-Way Handshake
+
+Before normal TCP data exchange, the endpoints establish connection state through a handshake.
+
+The basic sequence is:
+
+```text
+Client                         Server
+
+  | -------- SYN ------------> |
+  |                            |
+  | <------ SYN + ACK -------- |
+  |                            |
+  | -------- ACK ------------> |
+  |                            |
+        Connection established
+```
+
+### SYN
+
+SYN is a TCP flag used when initiating a connection.
+
+### SYN-ACK
+
+The server acknowledges the client's SYN and sends its own SYN.
+
+### ACK
+
+The client acknowledges the server's SYN.
+
+The handshake establishes the initial state required for the TCP connection.
+
+---
+
+## TCP Flags
+
+Important TCP flags include:
+
+| Flag | Purpose                                                            |
+| ---- | ------------------------------------------------------------------ |
+| SYN  | Initiates/synchronizes a connection                                |
+| ACK  | Acknowledges received TCP information                              |
+| FIN  | Indicates an endpoint wants to finish the connection               |
+| RST  | Abruptly resets a connection                                       |
+| PSH  | Requests that buffered data be passed to the receiving application |
+| URG  | Indicates urgent-pointer information                               |
+
+At this stage, focus primarily on:
+
+```text
+SYN
+ACK
+FIN
+RST
+```
+
+---
+
+## Ephemeral Ports
+
+A client usually does not use the server's well-known/listening port as its source port.
+
+Instead, the operating system assigns a temporary source port called an **ephemeral port**.
+
+Example:
+
+```text
+Client: 127.0.0.1:45122
+Server: 127.0.0.1:8000
+```
+
+Here:
+
+```text
+45122 → ephemeral client port
+8000  → server listening port
+```
+
+This allows many clients to communicate with the same server port.
+
+---
+
+## TCP Connection Termination
+
+TCP connections also maintain state when they are closed.
+
+A simplified view is:
+
+```text
+Client                         Server
+
+  | -------- FIN ------------> |
+  | <--------- ACK ----------- |
+  | <--------- FIN ----------- |
+  | -------- ACK ------------> |
+```
+
+The exact exchange can vary depending on which side closes first and the connection state.
+
+The important idea is:
+
+> TCP explicitly manages connection state from establishment through termination.
+
+---
+
+# UDP
+
+UDP (User Datagram Protocol) is a transport-layer protocol.
+
+Unlike TCP, UDP does not establish a TCP-style connection before sending data.
+
+UDP provides:
+
+* Datagram-based communication
+* No guarantee of delivery
+* No guarantee of ordering
+* No TCP-style retransmission
+* Lower protocol overhead than TCP
+
+UDP itself does not provide the reliability mechanisms that TCP provides.
+
+A useful comparison:
+
+```text
+TCP:
+Connection → reliable ordered byte stream
+
+UDP:
+Datagrams → no delivery/order guarantee from UDP
+```
+
+Do not simply remember:
+
+> UDP = faster
+
+The more important distinction is the **guarantees and connection state provided by the protocol**.
+
+---
+
+## TCP vs UDP
+
+| TCP                  | UDP                         |
+| -------------------- | --------------------------- |
+| Connection-oriented  | Connectionless              |
+| Reliable delivery    | No delivery guarantee       |
+| Ordered byte stream  | Datagram-based              |
+| Retransmission       | No UDP-level retransmission |
+| TCP connection state | No TCP-style connection     |
+| Three-way handshake  | No TCP handshake            |
+
+---
+
+# DNS Traffic
+
+DNS (Domain Name System) translates domain names into information such as IP addresses.
+
+Example:
+
+```bash
+nslookup example.com
+```
+
+or:
+
+```bash
+dig example.com
+```
+
+Traditionally, DNS commonly uses:
+
+```text
+UDP port 53
+```
+
+DNS can also use TCP, including situations where TCP is required by the DNS protocol or deployment.
+
+A simplified model:
+
+```text
+Client
+   ↓
+DNS query
+   ↓
+UDP
+   ↓
+DNS server : 53
+```
+
+DNS can be observed in Wireshark using:
+
+```text
+dns
+```
+
+---
+
+# ICMP and Ping
+
+`ping` normally uses ICMP (Internet Control Message Protocol), not TCP or UDP.
+
+Example:
+
+```bash
+ping -c 4 8.8.8.8
+```
+
+Typical IPv4 ping traffic:
+
+```text
+Echo Request
+      ↓
+Echo Reply
+```
+
+Important:
+
+> ICMP does not use TCP/UDP ports.
+
+Therefore:
+
+```text
+HTTP → TCP → port 8000
+DNS  → UDP/TCP → commonly port 53
+Ping → ICMP → no TCP/UDP port
+```
+
+---
+
+# Loopback vs Network Interface
+
+`127.0.0.1` is the IPv4 loopback address.
+
+Traffic sent to:
+
+```text
+127.0.0.1
+```
+
+is intended for the same host.
+
+The loopback interface is usually:
+
+```text
+lo
+```
+
+A VM's network interface may instead have an address such as:
+
+```text
+192.168.x.x
+```
+
+For example:
+
+```text
+127.0.0.1:8000
+```
+
+means the service is bound to loopback.
+
+Another machine normally cannot reach that service through the VM's normal network interface.
+
+---
+
+# Wireshark
+
+Wireshark allows network packets to be captured and inspected.
+
+A packet can be viewed as a stack of protocol layers.
+
+For example, HTTP over TCP over IPv4:
+
+```text
+Ethernet
+   ↓
+IP
+   ↓
+TCP
+   ↓
+HTTP
+```
+
+When inspecting a TCP packet, useful fields include:
+
+```text
+Source Port
+Destination Port
+Sequence Number
+Acknowledgment Number
+TCP Flags
+Window
+```
+
+---
+
+## Observing a TCP Handshake
+
+For a local HTTP server:
+
+```bash
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Start Wireshark on:
+
+```text
+lo
+```
+
+because the server is using `127.0.0.1`.
+
+Then generate traffic:
+
+```bash
+curl http://127.0.0.1:8000
+```
+
+A useful Wireshark filter is:
+
+```text
+tcp.port == 8000
+```
+
+The communication should conceptually look like:
+
+```text
+TCP handshake
+     ↓
+HTTP request
+     ↓
+HTTP response
+     ↓
+TCP connection termination
+```
+
+The handshake should contain:
+
+```text
+SYN
+SYN-ACK
+ACK
+```
+
+---
+
+# Reading a Network Packet
+
+When examining traffic, ask:
+
+### 1. Who sent it?
+
+Look at:
+
+```text
+Source IP
+Source Port
+```
+
+### 2. Who received it?
+
+Look at:
+
+```text
+Destination IP
+Destination Port
+```
+
+### 3. Which transport protocol is being used?
+
+```text
+TCP
+UDP
+```
+
+### 4. Is it another network-layer protocol?
+
+For example:
+
+```text
+ICMP
+```
+
+### 5. Where does the packet fit in the communication?
+
+For example:
+
+```text
+SYN
+SYN-ACK
+ACK
+DATA
+FIN
+```
+
+This is more useful than simply identifying the protocol.
+
+---
+
+# Useful Commands
+
+### Show listening TCP/UDP sockets
+
+```bash
+ss -tuln
+```
+
+### Show processes using sockets
+
+```bash
+ss -tulpn
+```
+
+### Show established TCP connections
+
+```bash
+ss -tn
+```
+
+### Generate HTTP traffic
+
+```bash
+curl http://127.0.0.1:8000
+```
+
+### Generate DNS traffic
+
+```bash
+nslookup example.com
+```
+
+### Generate ICMP traffic
+
+```bash
+ping -c 4 8.8.8.8
+```
+
+---
+
+# Security Perspective
+
+Understanding TCP, UDP, ports and sockets is fundamental to network security.
+
+These concepts are used later when studying:
+
+```text
+Port scanning
+Service enumeration
+SYN scanning
+Firewall rules
+SYN floods
+Connection exhaustion
+DNS security
+Packet filtering
+Network monitoring
+Intrusion detection
+Traffic analysis
+Command-and-control traffic
+Lateral movement
+```
+
+The core mental model is:
+
+```text
+Process
+   ↓
+Socket
+   ↓
+Port
+   ↓
+TCP / UDP
+   ↓
+IP
+   ↓
+Network Interface
+   ↓
+Network
+```
+
+The goal is to understand what each layer is doing rather than treating networking as a collection of commands.
