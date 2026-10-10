@@ -2669,3 +2669,1970 @@ Burp Suite
      ↓
 web security testing
 ```
+
+---
+
+# Web Architecture & Security Thinking
+
+## Why This Matters
+
+Understanding HTTP syntax is only the beginning of web security.
+
+A browser sends an HTTP request, but that request may pass through several layers before the application's business logic processes it.
+
+A simplified model is:
+
+```text
+Browser
+   ↓
+HTTP
+   ↓
+Reverse Proxy
+   ↓
+Web Application
+   ↓
+Database
+```
+
+The goal is to understand:
+
+- what each component does
+- where application decisions happen
+- where authentication happens
+- where authorization happens
+- where user-controlled input goes
+- what the application trusts
+- how business logic processes requests
+
+This creates the foundation for later web-security testing.
+
+---
+
+# 1. Web Application Architecture
+
+A simplified web architecture can look like:
+
+```text
+                    Internet
+                        |
+                        ↓
+                     Browser
+                        |
+                      HTTP
+                        |
+                        ↓
+                  Reverse Proxy
+                        |
+                        ↓
+                  Web Application
+                   /      |      \
+                  ↓       ↓       ↓
+             Database   Cache     API
+```
+
+This is a conceptual model.
+
+Not every real application has exactly these components or exactly this arrangement.
+
+The purpose of the model is to give a mental map for understanding where requests travel and where security decisions may occur.
+
+---
+
+# 2. Browser
+
+The browser is the client-side environment through which users interact with web applications.
+
+At an introductory level, important browser concepts include:
+
+```text
+HTML
+JavaScript
+Cookies
+DOM
+Same-Origin Policy
+Local Storage
+Session Storage
+```
+
+The browser receives content from the server and interprets it.
+
+A simplified model is:
+
+```text
+Server
+   ↓
+HTML + JavaScript + other resources
+   ↓
+Browser
+   ↓
+User interaction
+   ↓
+Additional HTTP requests
+```
+
+Modern web applications can therefore involve many HTTP requests rather than a single request for a single page.
+
+---
+
+# 3. HTML
+
+HTML defines the structure of web content.
+
+Example:
+
+```html
+<h1>Hello</h1>
+<p>Welcome.</p>
+```
+
+The browser parses HTML and turns it into structures that it can display and work with.
+
+Conceptually:
+
+```text
+HTML
+ ↓
+Browser parses HTML
+ ↓
+Rendered document
+```
+
+HTML becomes security-relevant because applications may place user-controlled data into HTML content.
+
+For now, the important idea is simply:
+
+> HTML is part of the content that the browser receives and interprets.
+
+---
+
+# 4. JavaScript
+
+JavaScript provides client-side program logic.
+
+A browser can execute JavaScript to perform tasks such as:
+
+- respond to user actions
+- modify page content
+- interact with the DOM
+- communicate with servers
+- make additional HTTP requests
+- manage application behavior
+
+A simplified flow:
+
+```text
+Server
+   ↓
+HTML + JavaScript
+   ↓
+Browser
+   ↓
+JavaScript executes
+   ↓
+Additional requests / page changes
+```
+
+JavaScript is therefore another major part of the browser-side web environment.
+
+---
+
+# 5. DOM
+
+DOM stands for:
+
+> Document Object Model
+
+The browser creates a representation of a document that scripts can interact with.
+
+Conceptually:
+
+```text
+HTML
+ ↓
+Browser parses document
+ ↓
+DOM
+ ↓
+JavaScript interacts with DOM
+```
+
+For example:
+
+```html
+<p id="message">Hello</p>
+```
+
+The browser represents this document structure internally so that JavaScript can interact with it.
+
+For now, the important idea is:
+
+> The browser does not merely display HTML as raw text. It creates a document model that scripts can work with.
+
+---
+
+# 6. Cookies
+
+Cookies provide a mechanism for storing client-side state associated with a website.
+
+A common flow is:
+
+```text
+Server
+   ↓
+Set-Cookie
+   ↓
+Browser stores cookie
+   ↓
+Later request
+   ↓
+Cookie
+   ↓
+Server
+```
+
+Example response:
+
+```http
+Set-Cookie: session=abc123
+```
+
+Later request:
+
+```http
+Cookie: session=abc123
+```
+
+Cookies are commonly used for maintaining application state and sessions.
+
+This creates an important chain:
+
+```text
+HTTP
+ ↓
+Cookie
+ ↓
+Session state
+ ↓
+Authentication
+```
+
+Cookies therefore become very important when studying web authentication.
+
+---
+
+# 7. Local Storage
+
+Local Storage is browser-side storage available to web applications.
+
+Conceptually:
+
+```text
+Web Application
+      ↓
+Browser
+      ↓
+Local Storage
+```
+
+It differs from cookies in an important practical way:
+
+> Data stored in Local Storage is not automatically attached to every HTTP request in the way cookies can be.
+
+At this stage, remember its architectural role rather than studying its security properties deeply.
+
+---
+
+# 8. Session Storage
+
+Session Storage is another browser-side storage mechanism.
+
+A simplified comparison:
+
+```text
+Local Storage
+→ browser-side persistent storage
+
+Session Storage
+→ browser-side storage associated with a browser session/tab context
+```
+
+These mechanisms allow client-side applications to maintain state locally.
+
+---
+
+# 9. Same-Origin Policy
+
+The Same-Origin Policy is a fundamental browser security mechanism.
+
+At a high level:
+
+> It restricts how scripts associated with one origin can interact with resources associated with another origin.
+
+An origin is associated with:
+
+```text
+scheme
+host
+port
+```
+
+For example:
+
+```text
+https://example.com:443
+```
+
+and:
+
+```text
+http://example.com:80
+```
+
+represent different origins because the scheme and port differ.
+
+Conceptually:
+
+```text
+Origin A
+   ↓
+JavaScript
+   ↓
+Browser security rules
+   ↓
+Can it interact with Origin B?
+```
+
+The important idea is:
+
+> Browsers place security restrictions around cross-origin interactions.
+
+This will matter later when learning concepts such as:
+
+```text
+CORS
+CSRF
+cross-origin requests
+browser security
+```
+
+Do not try to master those topics yet.
+
+---
+
+# 10. Reverse Proxy
+
+A reverse proxy sits between clients and backend applications.
+
+Simplified:
+
+```text
+Browser
+   ↓
+HTTP
+   ↓
+Reverse Proxy
+   ↓
+Application
+```
+
+A reverse proxy can receive incoming requests and forward them to backend services.
+
+The important security lesson is:
+
+> The component receiving an HTTP request may not be the component containing the actual application logic.
+
+A request can therefore pass through infrastructure before it reaches the application.
+
+Conceptually:
+
+```text
+Client
+ ↓
+Reverse Proxy
+ ↓
+Application
+```
+
+This becomes relevant when interpreting:
+
+- routing
+- headers
+- redirects
+- errors
+- authentication behavior
+- backend responses
+
+---
+
+# 11. Web Application
+
+The web application contains the logic that processes requests and performs the application's intended operations.
+
+A simplified flow is:
+
+```text
+Request
+   ↓
+Routing
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business Logic
+   ↓
+Database
+   ↓
+Response
+```
+
+This flow is one of the most important security models to remember.
+
+---
+
+# 12. Routing
+
+Routing determines which application component should handle a request.
+
+For example:
+
+```http
+GET /login
+```
+
+might be routed to a login handler.
+
+Another request:
+
+```http
+GET /profile
+```
+
+might be routed to a profile handler.
+
+Conceptually:
+
+```text
+HTTP Request
+      ↓
+Path
+      ↓
+Router
+      ↓
+Application handler
+```
+
+This is one reason application endpoints become important during security testing.
+
+---
+
+# 13. Authentication
+
+Authentication answers:
+
+> **Who am I?**
+
+It is the process by which the application determines an identity associated with a request.
+
+Examples can include:
+
+```text
+username + password
+session cookie
+token
+```
+
+Conceptually:
+
+```text
+Request
+   ↓
+Authentication
+   ↓
+Identity
+```
+
+For example:
+
+```text
+Request
+   ↓
+authentication
+   ↓
+Alice
+```
+
+The application may now associate the request with Alice's account.
+
+---
+
+# 14. Authorization
+
+Authorization answers:
+
+> **What am I allowed to do?**
+
+It is different from authentication.
+
+Authentication:
+
+```text
+Who are you?
+```
+
+Authorization:
+
+```text
+What are you allowed to do?
+```
+
+Example:
+
+```text
+Authentication
+      ↓
+You are Alice.
+
+Authorization
+      ↓
+Alice may view her profile.
+Alice may not access administrative functions.
+```
+
+The distinction can be visualized as:
+
+```text
+Identity
+   ↓
+Authentication
+   ↓
+Who is the user?
+
+Permission
+   ↓
+Authorization
+   ↓
+What can the user do?
+```
+
+This distinction is fundamental to understanding access-control security.
+
+---
+
+# 15. Authentication vs Authorization
+
+Keep this distinction extremely clear:
+
+```text
+Authentication
+→ establishes identity
+
+Authorization
+→ determines permissions
+```
+
+A user can be successfully authenticated while still being unauthorized to perform a particular action.
+
+For example:
+
+```text
+Alice logs in successfully
+        ↓
+Authentication succeeds
+        ↓
+Application knows Alice's identity
+        ↓
+Alice requests admin operation
+        ↓
+Authorization check
+        ↓
+Allowed or denied
+```
+
+Authentication alone is not permission.
+
+---
+
+# 16. Business Logic
+
+Business logic is the set of rules that implement what the application is actually supposed to do.
+
+Examples include:
+
+```text
+create an account
+place an order
+transfer money
+upload a file
+change a profile
+create a post
+delete a resource
+```
+
+Conceptually:
+
+```text
+Request
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business Logic
+   ↓
+Result
+```
+
+Business logic is important because an application can have technically valid code while still implementing an unsafe rule.
+
+The key security question is:
+
+> What assumptions does the application make while performing an operation?
+
+---
+
+# 17. Database
+
+The application may use a database to store persistent information.
+
+Examples of stored information might include:
+
+```text
+users
+profiles
+orders
+messages
+accounts
+```
+
+A simplified flow:
+
+```text
+HTTP Request
+      ↓
+Application
+      ↓
+Database operation
+      ↓
+Database result
+      ↓
+Application
+      ↓
+HTTP Response
+```
+
+This means user-controlled HTTP input can sometimes travel through application logic and eventually influence database operations.
+
+At this point, the important thing is understanding the **data flow**.
+
+Do not study injection techniques yet.
+
+---
+
+# 18. API
+
+An API is an interface through which software components communicate.
+
+A modern application may use HTTP APIs between the browser and backend services.
+
+For example:
+
+```text
+Browser
+   ↓
+HTTP
+   ↓
+API
+   ↓
+Backend
+```
+
+A frontend might request:
+
+```text
+/api/profile
+/api/orders
+/api/users
+```
+
+The backend then processes the request.
+
+Conceptually:
+
+```text
+Browser
+   ↓
+API
+   ↓
+Application logic
+   ↓
+Database
+```
+
+The API may therefore be another important boundary for authentication, authorization, input handling, and business logic.
+
+---
+
+# 19. Cache
+
+A cache stores information so it can be retrieved more efficiently.
+
+A simplified architecture is:
+
+```text
+Application
+    |
+    ↓
+  Cache
+    |
+    ↓
+Database
+```
+
+A cache can reduce the need to retrieve information repeatedly from the database.
+
+For now, remember:
+
+> A cache is another component that can influence how a web application behaves.
+
+Its security implications can be studied later.
+
+---
+
+# 20. The Complete Server-Side Flow
+
+Put the major concepts together:
+
+```text
+HTTP Request
+      ↓
+Reverse Proxy
+      ↓
+Routing
+      ↓
+Authentication
+      ↓
+Authorization
+      ↓
+Business Logic
+      ↓
+API / Cache / Database
+      ↓
+HTTP Response
+```
+
+This is a conceptual flow rather than a strict requirement for every application.
+
+The value of the model is that it gives you places to ask security questions.
+
+---
+
+# 21. The Hacker's Questions
+
+When looking at a web application, eventually you want to ask:
+
+```text
+Who am I?
+
+What am I allowed to do?
+
+What can I control?
+
+Where does my input go?
+
+What does the application trust?
+
+What happens when I violate assumptions?
+
+What data can I access?
+
+What happens on the other side of the API?
+```
+
+These are investigation questions.
+
+They are more valuable than memorizing isolated attack payloads.
+
+---
+
+# 22. Question 1 — Who Am I?
+
+This is the authentication question.
+
+```text
+Who am I?
+    ↓
+Authentication
+    ↓
+Identity
+```
+
+You want to understand how the application associates a request with an identity.
+
+Possible mechanisms include:
+
+```text
+credentials
+sessions
+cookies
+tokens
+```
+
+The exact mechanism depends on the application.
+
+---
+
+# 23. Question 2 — What Am I Allowed to Do?
+
+This is the authorization question.
+
+```text
+Who am I?
+    ↓
+What permissions do I have?
+    ↓
+What resources/actions are allowed?
+```
+
+For example:
+
+```text
+User
+ ↓
+regular account
+ ↓
+view own data
+ ↓
+cannot perform administrative actions
+```
+
+This is fundamentally about permissions.
+
+---
+
+# 24. Question 3 — What Can I Control?
+
+This is the input question.
+
+A client can influence many parts of an HTTP request.
+
+For example:
+
+```text
+URL
+Path
+Query parameters
+Headers
+Cookies
+Authorization data
+Body
+```
+
+Conceptually:
+
+```text
+Client-controlled input
+        ↓
+HTTP Request
+        ↓
+Application
+```
+
+This is one of the foundations of web security.
+
+---
+
+# 25. Question 4 — Where Does My Input Go?
+
+Finding where data travels through the application is extremely important.
+
+Suppose the request contains:
+
+```text
+name=Alice
+```
+
+That input might travel through:
+
+```text
+HTTP Request
+      ↓
+Router
+      ↓
+Application
+      ↓
+Business Logic
+      ↓
+Database
+```
+
+Or:
+
+```text
+HTTP Request
+      ↓
+Application
+      ↓
+HTML Response
+```
+
+Or:
+
+```text
+HTTP Request
+      ↓
+API
+      ↓
+Another backend service
+```
+
+The important question is:
+
+> What does the application eventually do with this value?
+
+---
+
+# 26. Question 5 — What Does the Application Trust?
+
+A web client can supply many values.
+
+For example:
+
+```http
+User-Agent: CyberLab
+```
+
+The server receives this value from the client.
+
+The application should not automatically treat client-supplied information as trustworthy.
+
+Conceptually:
+
+```text
+Untrusted Client
+      ↓
+HTTP Request
+      ↓
+Trust Boundary
+      ↓
+Application
+```
+
+Security decisions should be enforced by the server/application rather than relying on the client's cooperation.
+
+---
+
+# 27. Question 6 — What Happens When I Violate Assumptions?
+
+Applications are designed around assumptions.
+
+For example:
+
+```text
+username should be a valid identifier
+age should be numeric
+user should access only permitted resources
+request should contain required fields
+```
+
+A useful investigation question is:
+
+> What happens when those assumptions are not satisfied?
+
+The application might:
+
+```text
+reject the request
+return an error
+return a 4xx response
+handle the condition incorrectly
+produce unexpected behavior
+```
+
+This is closely connected to exceptional-condition handling and application robustness.
+
+---
+
+# 28. Question 7 — What Data Can I Access?
+
+This is closely related to access control.
+
+Conceptually:
+
+```text
+Identity
+   ↓
+Requested resource
+   ↓
+Permission check
+   ↓
+Allow / deny
+```
+
+The important question is:
+
+> Does the application correctly enforce which resources a particular user may access?
+
+This will become very important when studying Broken Access Control.
+
+For now, do not try to exploit it.
+
+Understand the architecture.
+
+---
+
+# 29. Question 8 — What Happens on the Other Side of the API?
+
+A frontend is not necessarily the entire application.
+
+A browser may communicate with an API:
+
+```text
+Browser
+   ↓
+HTTP
+   ↓
+API
+   ↓
+Backend
+```
+
+The backend may then communicate with:
+
+```text
+database
+cache
+other services
+```
+
+Therefore:
+
+> A visible webpage may only be one part of a much larger application.
+
+This is important when thinking about application architecture and future reconnaissance.
+
+---
+
+# 30. Trust Boundaries
+
+A trust boundary is a conceptual boundary between components or contexts that should not automatically trust one another.
+
+For web applications:
+
+```text
+Client
+  ↓
+HTTP
+  ↓
+Server
+```
+
+The client is under the user's control.
+
+The server therefore needs to treat incoming data appropriately.
+
+Another example:
+
+```text
+Browser
+   ↓
+API
+   ↓
+Backend service
+```
+
+Each component may have different responsibilities and trust assumptions.
+
+The key mindset is:
+
+> **Ask what each component assumes about the data it receives.**
+
+---
+
+# 31. Client vs Server Responsibility
+
+A useful distinction:
+
+```text
+Client
+→ sends requests
+
+Server
+→ enforces application rules
+```
+
+The client can provide:
+
+```text
+method
+path
+query
+headers
+body
+```
+
+But it should not be responsible for enforcing its own permissions.
+
+For example, a client saying:
+
+```text
+I am an administrator
+```
+
+does not make the user an administrator.
+
+The server must determine the identity and permissions according to its own trusted mechanisms.
+
+---
+
+# 32. Input Flow
+
+A useful general model is:
+
+```text
+Client
+   ↓
+HTTP Request
+   ↓
+Input
+   ↓
+Application
+   ↓
+Validation
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business Logic
+   ↓
+Backend
+   ↓
+HTTP Response
+```
+
+The exact order may differ between applications.
+
+The important thing is to understand that data can travel through multiple layers.
+
+---
+
+# 33. Why Input Matters
+
+A web application accepts data from clients because that's how users interact with it.
+
+Examples:
+
+```text
+login credentials
+search terms
+profile information
+file uploads
+IDs
+URLs
+API parameters
+```
+
+The application then interprets that data.
+
+Security problems can arise when the application interprets attacker-controlled input in an unsafe way.
+
+This is why the basic model:
+
+```text
+Input
+ ↓
+Application
+ ↓
+Unexpected behavior
+ ↓
+Security impact
+```
+
+is so important.
+
+---
+
+# 34. Business Logic Security
+
+Not every security problem involves memory corruption or a malformed packet.
+
+An application can have a perfectly valid request and still make a bad decision.
+
+For example, conceptually:
+
+```text
+User
+ ↓
+legitimate request
+ ↓
+application
+ ↓
+incorrect business rule
+ ↓
+undesired result
+```
+
+This is why understanding what the application is **supposed to do** matters.
+
+Business logic security asks questions about application assumptions and rules.
+
+---
+
+# 35. Web Security as Data Flow
+
+A useful way to think about web vulnerabilities is as data-flow problems.
+
+```text
+Input
+  ↓
+Processing
+  ↓
+Decision
+  ↓
+Action
+```
+
+More specifically:
+
+```text
+HTTP input
+   ↓
+Application
+   ↓
+Validation
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business logic
+   ↓
+Database / API / output
+```
+
+When studying a vulnerability later, ask:
+
+```text
+Where did the input originate?
+Where did it travel?
+How was it interpreted?
+What security checks were performed?
+What did the application eventually do?
+```
+
+---
+
+# 36. Authentication and Authorization in the Architecture
+
+A common misconception is that:
+
+```text
+login successful
+    =
+everything is allowed
+```
+
+That is incorrect.
+
+The architecture is better represented as:
+
+```text
+Request
+   ↓
+Authentication
+   ↓
+Identity
+   ↓
+Authorization
+   ↓
+Permission decision
+   ↓
+Business operation
+```
+
+Successful authentication establishes identity.
+
+Authorization determines whether that identity may perform the requested action.
+
+---
+
+# 37. HTTP Headers and Trust
+
+You learned earlier that a client can supply headers.
+
+Examples:
+
+```text
+User-Agent
+Cookie
+Authorization
+Origin
+```
+
+This means:
+
+```text
+Client
+ ↓
+Header
+ ↓
+Server
+```
+
+A header's presence does not automatically make its contents trustworthy.
+
+The application must determine:
+
+```text
+Which values are security-sensitive?
+Which values can be modified by the client?
+Which values must be validated?
+```
+
+This is particularly important for authentication and authorization.
+
+---
+
+# 38. A Request Through the Whole Architecture
+
+Take this example:
+
+```http
+GET /profile?id=42 HTTP/1.1
+Host: example.com
+Cookie: session=abc123
+```
+
+Think about the request like this:
+
+```text
+Browser
+   ↓
+HTTP request
+   ↓
+Reverse Proxy
+   ↓
+Routing
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business Logic
+   ↓
+Database
+   ↓
+HTTP Response
+```
+
+Now ask:
+
+```text
+Who is the user?
+What resource are they requesting?
+Why should they be allowed to access it?
+Where does id=42 go?
+What does the session identify?
+What happens if the requested resource belongs to another user?
+```
+
+Again, we're not exploiting anything.
+
+We're learning how to think about the request.
+
+---
+
+# 39. A Request With an API
+
+Imagine:
+
+```http
+GET /api/profile HTTP/1.1
+Host: example.com
+Authorization: Bearer <token>
+```
+
+Conceptually:
+
+```text
+Browser
+   ↓
+HTTP
+   ↓
+API
+   ↓
+Authentication
+   ↓
+Authorization
+   ↓
+Business Logic
+   ↓
+Database
+   ↓
+JSON response
+```
+
+The important observation is that the visible browser interface may only be the front end of a much larger system.
+
+---
+
+# 40. Security Questions as a Workflow
+
+When examining an application, think:
+
+```text
+1. What is the request?
+
+2. Who is making it?
+
+3. What identity is associated with it?
+
+4. What can the client control?
+
+5. What resource/action is being requested?
+
+6. What authorization decision should happen?
+
+7. Where does the input go?
+
+8. What does the application trust?
+
+9. What business logic is executed?
+
+10. What does the response reveal?
+```
+
+This is an investigation framework rather than a list of attacks.
+
+---
+
+# 41. OWASP Connection
+
+The Day 3 roadmap uses the OWASP Top 10:2025 as its current reference.
+
+The areas highlighted for the later learning path include:
+
+```text
+Broken Access Control
+Injection
+Authentication Failures
+```
+
+The broader 2025 list in the study plan also includes:
+
+```text
+Security Misconfiguration
+Software Supply Chain Failures
+Cryptographic Failures
+Insecure Design
+Software/Data Integrity Failures
+Logging & Alerting Failures
+Mishandling of Exceptional Conditions
+```
+
+The important thing for this session is not memorizing the entire list.
+
+The goal is seeing how today's architectural concepts eventually connect to security categories.
+
+---
+
+# 42. From Architecture to Vulnerabilities
+
+Your learning path is intentionally:
+
+```text
+HTTP
+ ↓
+Web Architecture
+ ↓
+Authentication
+ ↓
+Authorization
+ ↓
+Input
+ ↓
+Injection
+ ↓
+Business Logic
+ ↓
+Real Vulnerabilities
+```
+
+The dependency matters.
+
+For example, to understand an authorization vulnerability, you first need to understand:
+
+```text
+identity
+ ↓
+permissions
+ ↓
+resource
+ ↓
+authorization decision
+```
+
+To understand an injection vulnerability, you need to understand:
+
+```text
+input
+ ↓
+application
+ ↓
+interpretation
+ ↓
+backend
+```
+
+The goal is to understand the underlying mechanism instead of memorizing payloads.
+
+---
+
+# 43. The Most Important Mental Model
+
+Keep this model in your head:
+
+```text
+                   INTERNET
+                       |
+                       ↓
+                    Browser
+                       |
+                     HTTP
+                       |
+                       ↓
+                  Reverse Proxy
+                       |
+                       ↓
+                  Web Application
+                       |
+            ┌──────────┼──────────┐
+            ↓          ↓          ↓
+       Authentication Authorization Business Logic
+            |          |          |
+            └──────────┼──────────┘
+                       ↓
+                  API / Cache
+                       |
+                       ↓
+                    Database
+                       |
+                       ↓
+                  HTTP Response
+```
+
+This is not a literal implementation of every website.
+
+It is your **security map**.
+
+---
+
+# 44. The Full Data-Flow Model
+
+Another useful model is:
+
+```text
+Client
+  ↓
+Request
+  ↓
+Input
+  ↓
+Server
+  ↓
+Authentication
+  ↓
+Authorization
+  ↓
+Business Logic
+  ↓
+Backend Systems
+  ↓
+Response
+  ↓
+Client
+```
+
+At every stage ask:
+
+```text
+What data is moving?
+Who controls it?
+What is trusted?
+What is validated?
+What decision is being made?
+```
+
+---
+
+# 45. Security Researcher Mindset
+
+A beginner often asks:
+
+```text
+"What payload should I try?"
+```
+
+A stronger approach begins with:
+
+```text
+"What does this application do?"
+```
+
+Then:
+
+```text
+Who am I?
+What can I do?
+What can I control?
+Where does my input go?
+What does the application trust?
+What assumptions does it make?
+What happens when those assumptions change?
+What data can I access?
+```
+
+This leads to understanding instead of memorization.
+
+---
+
+# 46. What We Are NOT Doing Yet
+
+Do not jump directly into:
+
+```text
+SQL Injection
+XSS
+IDOR
+SSRF
+Burp attacks
+Payload collections
+```
+
+The purpose of this session is to understand the architecture that makes those vulnerabilities meaningful.
+
+The Day 3 plan deliberately postpones vulnerability exploitation until after the HTTP and architecture foundations are established.
+
+---
+
+# 47. Revision Examples
+
+## Example 1 — Profile Request
+
+```http
+GET /profile?id=42 HTTP/1.1
+Host: example.com
+Cookie: session=abc123
+```
+
+Ask:
+
+```text
+Method?
+GET
+
+Path?
+/profile
+
+Query?
+id=42
+
+Authentication/session data?
+Cookie
+
+What identity does the session represent?
+
+What resource is being requested?
+
+What authorization check should happen?
+
+Where does id=42 go?
+```
+
+---
+
+## Example 2 — API Request
+
+```http
+GET /api/orders HTTP/1.1
+Host: example.com
+Authorization: Bearer <token>
+```
+
+Think:
+
+```text
+Browser
+ ↓
+API
+ ↓
+Authentication
+ ↓
+Authorization
+ ↓
+Business Logic
+ ↓
+Database
+ ↓
+JSON response
+```
+
+---
+
+## Example 3 — Client-Controlled Header
+
+```http
+User-Agent: CyberLab
+```
+
+Ask:
+
+```text
+Who supplied this?
+```
+
+Answer:
+
+```text
+The client.
+```
+
+Then ask:
+
+```text
+Should the server treat it as a trusted identity?
+```
+
+Answer:
+
+```text
+No automatic assumption of trust.
+```
+
+---
+
+# 48. Core Definitions
+
+### Browser
+
+Client-side software used to interact with web applications.
+
+### Web Server
+
+Server-side infrastructure that receives and responds to web requests.
+
+### Reverse Proxy
+
+An intermediary that receives client requests and forwards them to backend systems.
+
+### Application
+
+Software implementing the application's behavior and business logic.
+
+### Database
+
+A system used to store and retrieve persistent application data.
+
+### API
+
+An interface through which software components communicate.
+
+### Cache
+
+A component that stores data for more efficient retrieval.
+
+### Authentication
+
+Determining or establishing the identity associated with a request.
+
+### Authorization
+
+Determining what an authenticated identity is allowed to access or perform.
+
+### Business Logic
+
+The rules and operations implementing what the application is designed to do.
+
+### Trust Boundary
+
+A conceptual boundary across which data should not automatically be trusted.
+
+---
+
+# 49. Quick Comparison
+
+```text
+Authentication
+→ Who are you?
+
+Authorization
+→ What are you allowed to do?
+
+Input
+→ What can the client control?
+
+Routing
+→ Which application component handles the request?
+
+Business Logic
+→ What operation does the application perform?
+
+Database
+→ Where can persistent application data be stored?
+
+API
+→ How can software components communicate?
+
+Reverse Proxy
+→ What intermediary receives and forwards requests?
+
+Browser
+→ Where client-side web behavior occurs?
+```
+
+---
+
+# 50. Final Mental Model
+
+When you encounter a web application, visualize:
+
+```text
+                    USER
+                     |
+                     ↓
+                  BROWSER
+                     |
+                     | HTTP Request
+                     ↓
+               REVERSE PROXY
+                     |
+                     ↓
+                  ROUTING
+                     |
+                     ↓
+              AUTHENTICATION
+                     |
+                     ↓
+              AUTHORIZATION
+                     |
+                     ↓
+               BUSINESS LOGIC
+                     |
+            ┌────────┼────────┐
+            ↓        ↓        ↓
+           API     CACHE   DATABASE
+            |                 |
+            └────────┬────────┘
+                     ↓
+                HTTP Response
+                     |
+                     ↓
+                  BROWSER
+```
+
+Now ask at every boundary:
+
+```text
+Who controls this?
+What is trusted?
+What is validated?
+What identity is associated with this?
+What permissions are required?
+Where does the data go?
+What happens if an assumption is wrong?
+```
+
+---
+
+# 51. Key Takeaways
+
+1. A web application is more than a webpage.
+
+2. A request may pass through reverse proxies, routing, authentication, authorization, application logic, APIs, caches, and databases.
+
+3. Authentication answers:
+
+```text
+Who am I?
+```
+
+4. Authorization answers:
+
+```text
+What am I allowed to do?
+```
+
+5. The client controls significant parts of an HTTP request.
+
+6. Client-controlled data should not automatically be trusted.
+
+7. Input can travel through multiple layers of an application.
+
+8. Business logic determines how the application performs its intended operations.
+
+9. The browser has its own security mechanisms, including the Same-Origin Policy.
+
+10. Understanding architecture is more valuable than memorizing isolated attack payloads.
+
+11. Web security is fundamentally about understanding:
+
+```text
+input
+ ↓
+processing
+ ↓
+trust
+ ↓
+identity
+ ↓
+authorization
+ ↓
+business logic
+ ↓
+data
+ ↓
+output
+```
+
+---
+
+# Security Mindset
+
+When you meet a web application, don't immediately think:
+
+```text
+"What vulnerability can I try?"
+```
+
+Start with:
+
+```text
+How does this application work?
+```
+
+Then investigate:
+
+```text
+Who am I?
+
+What am I allowed to do?
+
+What can I control?
+
+Where does my input go?
+
+What does the application trust?
+
+What happens when I violate assumptions?
+
+What data can I access?
+
+What happens behind the API?
+```
+
+Those questions give you the map.
+
+Later, when you start using Burp Suite and security labs, the goal will be to use that map to investigate what the application actually does.
+
+---

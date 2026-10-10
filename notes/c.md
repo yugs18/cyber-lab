@@ -1,261 +1,403 @@
 # C Notes
 
-## Variables
+A practical reference for the C concepts covered so far: basic syntax, control flow, functions, arrays and strings, memory, pointers, dynamic allocation, structures, input/output, the preprocessor, Linux processes, `fork()`, `waitpid()`, file descriptors, `/proc`, and compilation.
 
-A variable is a named object used to store a value.
+---
 
-Example:
-
-```c
-int score;
-int age = 20;
-```
-
-A variable has:
-
-* a type
-* a name
-* a value
-* storage in memory
-
-A declaration tells the compiler about an identifier and its type.
-
-An initialization gives an object its initial value.
-
-Example:
+## 1. A basic C program
 
 ```c
-int score = 10;
-```
-
-Here:
-
-```text
-score → variable name
-int   → type
-10    → initial value
-```
-
-### Scope
-
-Scope determines where an identifier can be used in source code.
-
-Common scopes include:
-
-* block scope: inside a block such as `{ ... }`
-* function parameter scope
-* file scope: declarations outside functions
-
-Example:
-
-```c
-int global_value = 5;
+#include <stdio.h>
 
 int main(void)
 {
-    int local_value = 10;
-
+    printf("Hello, world!\n");
     return 0;
 }
 ```
 
-`global_value` has file scope.
+- `#include <stdio.h>` makes declarations for standard input/output functions such as `printf()` available.
+- `int main(void)` defines the program's entry point. `void` means `main` takes no arguments in this declaration.
+- `{ ... }` encloses a block.
+- `printf()` writes formatted text to standard output.
+- `\n` is a newline character.
+- `return 0;` reports successful program termination to the environment.
 
-`local_value` has block scope.
+### Compile and run
 
-### Storage duration / lifetime
+```bash
+gcc -Wall -Wextra -Wpedantic hello.c -o hello
+./hello
+```
+
+`gcc` invokes the compiler driver; `hello.c` is the source file; `-o hello` names the output executable. The warning flags ask GCC to report many common issues. They do not enable every possible warning, but they are a useful baseline.
+
+Compilation creates or updates the executable; `./hello` runs it.
+
+---
+
+## 2. Variables, declarations, and initialization
+
+A variable is a named object that stores a value of a particular type.
+
+```c
+int score;       // declaration; the value is not initialized here
+int age = 20;    // declaration and initialization
+char grade = 'A';
+float temperature = 21.5f;
+```
+
+Do not declare the same variable twice in the same scope like this:
+
+```c
+int score;
+int score = 10;  // invalid redeclaration in the same scope
+```
+
+Instead, either initialize it in the declaration or assign a value later:
+
+```c
+int score;
+score = 10;
+```
+
+A local automatic variable that is not initialized has an indeterminate value. Do not read that value before assigning a valid one.
+
+### Scope
+
+Scope describes where a name can be used in source code.
+
+```c
+int global_value = 5;   // file scope
+
+int main(void)
+{
+    int local_value = 10; // block scope
+    printf("%d\n", local_value);
+    return 0;
+}
+```
+
+- `global_value` has file scope because it is declared outside a function.
+- `local_value` has block scope because it is declared inside `main`'s block.
+
+### Storage duration
 
 Storage duration describes how long an object exists.
 
-Common categories include:
+- **Automatic:** commonly used for local variables; the object's lifetime is tied to execution of its block.
+- **Static:** the object exists for the entire execution of the program.
+- **Allocated:** dynamically allocated storage exists until it is released, for example with `free()`.
 
-* automatic: normally created when execution enters the block and ceases to exist when execution leaves it
-* static: exists for the entire execution of the program
-* allocated: dynamically created with functions such as `malloc()` and remains allocated until released
+```c
+int global_count = 0; // static storage duration
 
-Important distinction:
-
-```text
-Scope
-→ where an identifier can be used
-
-Storage duration
-→ how long the object exists
-
-Linkage
-→ whether declarations in different scopes or translation units
-  refer to the same entity
+int main(void)
+{
+    int x = 3;          // automatic storage duration
+    static int y = 7;   // static storage duration
+    (void)x;
+    (void)y;
+    return 0;
+}
 ```
 
-`static` can affect storage duration and/or linkage depending on where it is used.
+### Scope, storage duration, and linkage are different
+
+- **Scope:** where an identifier can be used in the source code.
+- **Storage duration:** how long an object exists.
+- **Linkage:** whether declarations in different scopes or translation units refer to the same entity.
+
+`static` has different effects depending on where it is used. At file scope, it can give an identifier internal linkage; for a local variable, it gives the object static storage duration.
 
 ---
 
-# Data Types
+## 3. Data types
 
-C provides several fundamental data types.
-
-* `char`: exactly one byte; can represent a character or small integer value
-* `int`: integer type
-* `float`: single-precision floating-point type
-* `double`: double-precision floating-point type
-* `void`: represents the absence of a value
-
-Example:
+Common built-in types:
 
 ```c
-int count = 42;
 char letter = 'A';
-float pi = 3.14f;
+int count = 42;
+float ratio = 3.14f;
 double precise = 3.1415926535;
 ```
 
-The exact size and range of types such as `int`, `float`, and `double` are implementation-dependent.
+- `char`: occupies exactly one C byte. It can represent a character or a small integer.
+- `int`: integer type.
+- `float`: floating-point type.
+- `double`: floating-point type with at least the precision of `float`.
+- `void`: represents no value, such as the return type of a function that returns nothing.
 
----
+The sizes and ranges of types such as `int`, `long`, `float`, and `double` depend on the implementation. A C byte is the size of a `char`; it is commonly 8 bits on modern systems, but the C language does not require that everywhere.
 
-## `char`
-
-A `char` occupies exactly one byte in C.
-
-A C byte is defined in terms of `char`; it is not required by the language to be exactly 8 bits.
-
-Most modern systems use:
-
-```text
-1 byte = 8 bits
-```
-
-A `char` can be used as a character:
+### Type modifiers and qualifiers
 
 ```c
-char letter = 'A';
+short int small = 12;
+long int large = 123456789L;
+unsigned int total = 100;
+const int limit = 10;
+volatile int hardware_value = 0;
 ```
 
-or as a small integer:
+- `short` and `long` select integer types with implementation-defined size/range relationships.
+- `signed` and `unsigned` affect the values an integer type can represent.
+- `const` means an object cannot be modified through an access path that treats it as `const`. It does not mean every object originally assigned to a `const` pointer is globally immutable.
+- `volatile` tells the compiler that accesses to the object are significant and its value may change in ways not visible in ordinary program flow. It is **not** a general thread-synchronization mechanism.
 
-```c
-char value = 65;
-```
-
----
-
-## Type Modifiers
-
-Common modifiers include:
-
-* `short`
-* `long`
-* `signed`
-* `unsigned`
-* `const`
-* `volatile`
-
-### `signed` and `unsigned`
-
-```c
-unsigned int count = 100;
-```
-
-An unsigned integer cannot represent negative values and can represent a larger positive range than the corresponding signed type of the same width.
-
-### `short` and `long`
-
-These modify integer types.
-
-Examples:
-
-```c
-short int small;
-long int large;
-```
-
-### `const`
-
-`const` prevents modification through the associated object or access path.
-
-Example:
-
-```c
-const int value = 10;
-```
-
-The program should not attempt to modify `value`.
-
-With:
+Example of a pointer to constant characters:
 
 ```c
 const char *name = "Alice";
+printf("%s\n", name);
 ```
 
-the characters pointed to by `name` should not be modified through that pointer.
-
-### `volatile`
-
-`volatile` tells the compiler that the value of an object may change in ways not represented by the normal flow of the program.
-
-It is useful in certain low-level situations, such as memory-mapped hardware or externally modified objects.
-
-`volatile` is **not** a general thread-synchronization mechanism.
+Do not attempt to modify the characters through `name`.
 
 ---
 
-# Memory
+## 4. Operators and control flow
 
-Memory is where program data and execution-related information are stored while a program runs.
-
-A common conceptual process layout is:
-
-```text
-High addresses
-┌─────────────────────┐
-│       Stack         │
-├─────────────────────┤
-│         ↓           │
-│                     │
-│         ↑           │
-├─────────────────────┤
-│        Heap         │
-├─────────────────────┤
-│ Static / global data│
-├─────────────────────┤
-│    Code / text      │
-└─────────────────────┘
-Low addresses
-```
-
-The exact layout varies by operating system, architecture, executable format, compiler, runtime, and security features.
-
-Common conceptual regions:
-
-* code/text: program instructions
-* static/global data: objects with static storage duration
-* heap: dynamically allocated memory
-* stack: function call frames and commonly automatic local variables
-
-### Important ideas
-
-* program objects occupy storage
-* objects can have addresses
-* automatic storage is managed by the language/runtime rules
-* dynamically allocated memory must be explicitly released
-* memory leaks happen when allocated memory is no longer needed but is never released
-
-Do not assume that the conceptual layout above is a strict universal physical arrangement.
-
----
-
-# Addresses
-
-An address identifies the location of an object in the program's address space.
-
-The address-of operator is:
+### Arithmetic operators
 
 ```c
-&
+int a = 10;
+int b = 3;
+
+printf("sum = %d\n", a + b);       // 13
+printf("difference = %d\n", a - b); // 7
+printf("product = %d\n", a * b);    // 30
+printf("quotient = %d\n", a / b);   // 3: integer division
+printf("remainder = %d\n", a % b);  // 1
+```
+
+When both operands of `/` are integers, the fractional part is discarded. For example, `10 / 3` evaluates to `3`.
+
+### Comparisons and branching
+
+```c
+if (a > b) {
+    puts("a is greater");
+} else if (a == b) {
+    puts("they are equal");
+} else {
+    puts("a is smaller");
+}
+```
+
+Common comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`. Remember that `=` assigns a value, while `==` compares values.
+
+### `for` loop
+
+```c
+for (int i = 0; i < 5; i++) {
+    printf("%d\n", i);
+}
+```
+
+This prints `0` through `4`.
+
+### `while` loop
+
+```c
+int count = 0;
+while (count < 3) {
+    printf("%d\n", count);
+    count++;
+}
+```
+
+The loop continues while its condition is true.
+
+### `switch`
+
+```c
+int choice = 2;
+
+switch (choice) {
+    case 1:
+        puts("one");
+        break;
+    case 2:
+        puts("two");
+        break;
+    default:
+        puts("something else");
+        break;
+}
+```
+
+`break` exits the `switch`. Without a `break`, execution can fall through into the next case.
+
+---
+
+## 5. Functions
+
+A function packages reusable logic.
+
+```c
+int add(int a, int b)
+{
+    return a + b;
+}
+
+int main(void)
+{
+    int result = add(2, 3);
+    printf("%d\n", result); // 5
+    return 0;
+}
+```
+
+- `int` before `add` is its return type.
+- `a` and `b` are parameters.
+- `return` sends a result back to the caller.
+
+### Function prototypes
+
+A prototype declares a function's interface before its definition is encountered.
+
+```c
+int add(int a, int b);
+
+int main(void)
+{
+    printf("%d\n", add(2, 3));
+    return 0;
+}
+
+int add(int a, int b)
+{
+    return a + b;
+}
+```
+
+### `void` functions and parameters
+
+```c
+void greet(void)
+{
+    puts("Hello");
+}
+```
+
+- `void` as the return type means the function returns no value.
+- `void` inside the parameter list means the function takes no arguments in traditional C declarations.
+
+---
+
+## 6. Arrays
+
+An array stores a fixed number of elements of the same type in contiguous memory.
+
+```c
+int nums[5] = {10, 20, 30, 40, 50};
+
+printf("%d\n", nums[0]); // 10
+printf("%d\n", nums[2]); // 30
+```
+
+Array indexes start at `0`. For a five-element array, the valid indexes are `0` through `4`.
+
+C does not automatically check array bounds. Reading or writing out of bounds causes undefined behavior.
+
+### Arrays and pointers
+
+In many expressions, an array name is converted to a pointer to its first element.
+
+```c
+int nums[3] = {10, 20, 30};
+int *p = nums;       // equivalent here to: int *p = &nums[0];
+
+printf("%d\n", nums[1]);   // 20
+printf("%d\n", *(p + 1));  // 20
+```
+
+Pointer arithmetic advances by elements of the pointed-to type. If `p` is an `int *`, `p + 1` points to the next `int`, not necessarily the next byte.
+
+Array elements themselves are contiguous. Structures may contain padding between members to satisfy alignment requirements.
+
+---
+
+## 7. C strings
+
+C does not have a dedicated built-in string object type. A C string is a sequence of `char` elements terminated by the null character `\0`.
+
+```c
+char name[] = "Alice";
+printf("%s\n", name);
+```
+
+The array contains six characters/bytes on typical systems: `A`, `l`, `i`, `c`, `e`, and the terminating `\0`. More generally, the array has `sizeof("Alice")` bytes, including the terminator.
+
+### Common string functions
+
+Include:
+
+```c
+#include <string.h>
 ```
 
 Example:
+
+```c
+char text[] = "hello";
+printf("length = %zu\n", strlen(text)); // 5; excludes '\0'
+```
+
+Important functions include:
+
+- `strlen(s)`: counts characters before the terminating `\0`.
+- `strcpy(dest, src)`: copies a string including its terminator; `dest` must have enough space.
+- `strcmp(a, b)`: compares two strings lexicographically.
+
+Example of copying into a sufficiently large destination:
+
+```c
+char source[] = "world";
+char destination[16];
+
+strcpy(destination, source);
+printf("%s\n", destination);
+```
+
+`strcpy()` does not know the destination capacity. If the destination is too small, the copy can write out of bounds. Always reason about the destination size.
+
+---
+
+## 8. Memory and addresses
+
+A running process uses memory for code and data. A common conceptual diagram is:
+
+```text
+Higher addresses
+┌─────────────────────┐
+│ Stack (often)       │
+├─────────────────────┤
+│                     │
+│ Address-space area  │
+│                     │
+├─────────────────────┤
+│ Heap (often)        │
+├─────────────────────┤
+│ Static/global data  │
+├─────────────────────┤
+│ Code/text (often)   │
+└─────────────────────┘
+Lower addresses
+```
+
+This is only a teaching model. The actual layout depends on the operating system, architecture, executable format, compiler, runtime, and security features.
+
+- **Code/text:** machine instructions for the program.
+- **Static/global data:** objects with static storage duration.
+- **Heap:** commonly used for dynamically allocated storage.
+- **Stack:** commonly used for function-call information and many local variables.
+
+The C language does not require every local variable to be physically placed on a stack; compilers can optimize how objects are represented.
+
+### Address-of operator: `&`
 
 ```c
 int score = 42;
@@ -264,712 +406,475 @@ printf("score = %d\n", score);
 printf("address = %p\n", (void *)&score);
 ```
 
-`score` accesses the value.
+- `score` means the value stored in the object.
+- `&score` obtains the address of the object.
+- `%p` is the `printf` conversion specifier for a pointer; passing `(void *)&score` is the conventional portable form.
 
-`&score` produces the address of `score`.
-
-`%p` is used to print a pointer value.
-
-Casting to `(void *)` is the conventional form used with `%p`.
+Addresses can differ between runs. Do not assume variables declared next to each other in source code will have adjacent addresses or appear in source order in memory.
 
 ---
 
-# Pointers
+## 9. Pointers
 
-A pointer is an object that stores a pointer value, typically the address of another object or function.
-
-Example:
-
-```c
-int x = 10;
-int *p = &x;
-```
-
-Interpretation:
-
-```text
-x
-┌─────────┐
-│   10    │
-└─────────┘
-    ↑
-    │
-    p
-```
-
-`p` stores the address of `x`.
-
-A useful beginner mental model:
-
-> The value of a pointer is an address.
-
----
-
-## Dereferencing
-
-The unary `*` operator can be used to dereference a pointer.
-
-Example:
+A pointer is an object that stores a pointer value, commonly the address of another object.
 
 ```c
 int x = 10;
 int *p = &x;
 
-printf("%d\n", *p);
+printf("x = %d\n", x);        // value of x
+printf("&x = %p\n", (void *)&x); // address of x
+printf("p = %p\n", (void *)p);   // address stored in p
+printf("*p = %d\n", *p);      // value of the pointed-to object
 ```
 
-`*p` means:
-
-> Access the object located at the address stored in `p`.
-
-Changing `*p` changes the pointed-to object:
-
-```c
-*p = 20;
-```
-
-Now:
-
-```c
-printf("%d\n", x);
-```
-
-prints:
+Remember:
 
 ```text
-20
+x   → value of x
+&x  → address of x
+p   → pointer value (the address stored in p)
+*p  → value of the object p points to
+&p  → address of the pointer variable itself
 ```
 
-Conceptually:
-
-```text
-p
-│
-│ contains address
-▼
-┌─────────┐
-│   20    │
-└─────────┘
-x
-```
-
----
-
-## Pointer Rules
-
-Important pointer rules:
-
-* a pointer may intentionally contain `NULL`
-* never dereference an uninitialized pointer
-* never dereference an invalid pointer
-* never dereference a dangling pointer
-* check for `NULL` when a pointer may legitimately be null
-* understand the lifetime of the object being pointed to
-* pointer arithmetic depends on the pointed-to type
-
-Example:
+### Dereferencing and modifying an object
 
 ```c
-int nums[3] = {10, 20, 30};
-int *p = nums;
+int x = 10;
+int *p = &x;
 
-printf("%d\n", *(p + 1));
+*p = 25;
+printf("%d\n", x); // 25
 ```
 
-Output:
+`*p = 25` writes through the pointer and changes `x`.
 
-```text
-20
-```
+### Null pointers
 
-`p + 1` points to the next `int`, not merely the next byte.
-
----
-
-# `NULL` Pointers
-
-A pointer can intentionally contain no valid object address:
+A pointer can intentionally be initialized to `NULL`:
 
 ```c
 int *p = NULL;
-```
 
-Testing:
-
-```c
-if (p != NULL)
-{
+if (p != NULL) {
     printf("%d\n", *p);
 }
 ```
 
-Dereferencing `NULL` is invalid.
+Do not dereference a null pointer.
 
-```c
-int *p = NULL;
-printf("%d\n", *p);   // invalid
-```
+### Pointer safety rules
 
----
-
-# Arrays
-
-An array stores multiple elements of the same type in contiguous memory.
-
-Example:
-
-```c
-int nums[3] = {10, 20, 30};
-```
-
-Conceptually:
-
-```text
-nums[0]   nums[1]   nums[2]
-  10        20        30
-```
-
-The elements are stored contiguously.
-
-Important:
-
-* arrays have a fixed size when declared this way
-* C does not automatically perform bounds checking
-* reading or writing outside the valid range is undefined behavior
-
-Example of valid access:
-
-```c
-printf("%d\n", nums[1]);
-```
-
-Invalid:
-
-```c
-printf("%d\n", nums[3]);
-```
-
-For a three-element array, valid indexes are:
-
-```text
-0
-1
-2
-```
+- Do not dereference an uninitialized pointer.
+- Do not dereference a null, invalid, or dangling pointer.
+- Do not access an object after its lifetime has ended.
+- Do not perform pointer arithmetic outside the permitted bounds of an array object (apart from forming a one-past-the-end pointer, which must not be dereferenced).
+- Check whether allocation functions returned `NULL` before using the result.
 
 ---
 
-# Arrays and Pointers
+## 10. `sizeof`
 
-In many expressions, an array name is converted to a pointer to its first element.
-
-Example:
-
-```c
-int nums[3] = {10, 20, 30};
-
-int *p = nums;
-```
-
-This is conceptually similar to:
-
-```c
-int *p = &nums[0];
-```
-
-Therefore:
-
-```c
-*(p + 1)
-```
-
-accesses the second element.
-
-Array notation and pointer notation are closely related:
-
-```c
-nums[1]
-```
-
-and:
-
-```c
-*(nums + 1)
-```
-
-refer to the same element.
-
----
-
-# `sizeof`
-
-`sizeof` is an operator that returns the size, in bytes, of a type or object.
-
-Example:
+`sizeof` gives the size of a type or object in bytes.
 
 ```c
 int a = 10;
 
-printf("%zu\n", sizeof(int));
-printf("%zu\n", sizeof(a));
-printf("%zu\n", sizeof(double));
+printf("sizeof(int) = %zu\n", sizeof(int));
+printf("sizeof(a) = %zu\n", sizeof(a));
+printf("sizeof(double) = %zu\n", sizeof(double));
 ```
 
-Important properties:
+Use `%zu` to print a `size_t`, the type returned by `sizeof`.
 
-* it helps avoid hard-coding platform-specific sizes
-* it is useful for dynamic allocation
-* it is useful with arrays and structures
-* it helps write more portable code
+The sizes of types such as `int` can vary between platforms, so avoid assuming a size unless your program targets a specific platform.
 
-Example:
+For memory allocation, this pattern ties the allocation size to the pointed-to type:
 
 ```c
-int *arr = malloc(sizeof(int) * 10);
+int *values = malloc(10 * sizeof *values);
 ```
 
-This requests enough storage for ten `int` objects, assuming the allocation succeeds.
-
-A more common pattern is:
-
-```c
-int *arr = malloc(sizeof *arr * 10);
-```
-
-because it avoids repeating the type.
+This requests enough space for ten `int` objects, assuming allocation succeeds.
 
 ---
 
-# Dynamic Memory
+## 11. Dynamic memory
 
-Dynamic memory is obtained at runtime.
+Dynamic allocation requests storage while the program is running. The standard allocation functions are declared in `<stdlib.h>`.
 
-The standard allocation functions are provided by:
+- `malloc(size)`: allocates a block of the requested size; its contents are uninitialized.
+- `calloc(count, size)`: allocates space for an array and initializes all bits to zero.
+- `realloc(ptr, size)`: resizes a previously allocated block, potentially moving it.
+- `free(ptr)`: releases a previously allocated block.
+
+### Example with `malloc()`
 
 ```c
+#include <stdio.h>
 #include <stdlib.h>
-```
 
-Common functions:
-
-```text
-malloc()
-calloc()
-realloc()
-free()
-```
-
-Example:
-
-```c
-int *p = malloc(sizeof *p);
-
-if (p == NULL)
+int main(void)
 {
-    return 1;
+    int *value = malloc(sizeof *value);
+    if (value == NULL) {
+        perror("malloc");
+        return EXIT_FAILURE;
+    }
+
+    *value = 42;
+    printf("%d\n", *value);
+
+    free(value);
+    value = NULL;
+    return EXIT_SUCCESS;
 }
-
-*p = 42;
-
-free(p);
-p = NULL;
 ```
 
 Conceptual lifecycle:
 
 ```text
-allocate
-   ↓
-initialize
-   ↓
-use
-   ↓
-free
+allocate → check result → initialize/use → free
 ```
+
+A **memory leak** happens when allocated memory is no longer needed but is not released. A **use-after-free** happens when code accesses memory after it has been freed. Setting a pointer to `NULL` after `free()` only changes that pointer variable; it does not restore the freed allocation or fix other pointers that may refer to it.
 
 ---
 
-# Memory Safety
+## 12. Structures and `typedef`
 
-Memory safety means using memory within its valid lifetime and bounds.
-
-Common memory bugs include:
-
-* out-of-bounds access
-* uninitialized pointer dereference
-* `NULL` pointer dereference
-* use-after-free
-* dangling pointers
-* double free
-* memory leaks
-* invalid pointer arithmetic
-
-Good practices:
-
-* initialize variables appropriately
-* validate allocation results
-* respect array bounds
-* understand object lifetimes
-* free allocated memory when finished
-* avoid using pointers after the objects they refer to cease to exist
-* use `const` when data should not be modified
-
-Example:
+A `struct` groups related members into one object.
 
 ```c
-int *p = malloc(sizeof *p);
+#include <stdio.h>
 
-if (p == NULL)
-{
-    return 1;
-}
-
-*p = 42;
-
-free(p);
-p = NULL;
-```
-
-Setting the pointer to `NULL` after `free()` does not restore the freed memory; it simply prevents that pointer variable from continuing to hold the old address.
-
----
-
-# Scope, Lifetime, and Linkage
-
-These concepts are related but distinct.
-
-## Scope
-
-Determines where an identifier can be referenced in source code.
-
-## Storage duration
-
-Determines how long an object exists.
-
-## Linkage
-
-Determines whether identifiers in different declarations refer to the same entity.
-
-For example:
-
-```c
-int global_count = 0;
+struct Student {
+    char name[20];
+    int age;
+};
 
 int main(void)
 {
-    int local_count = 1;
+    struct Student student = {"Alice", 20};
+    printf("%s, %d\n", student.name, student.age);
+    return 0;
+}
+```
+
+Access members with the dot operator: `student.name`, `student.age`.
+
+A structure can contain padding between members for alignment, so its total size may be larger than the sum of member sizes.
+
+### `typedef`
+
+`typedef` creates an alias for a type.
+
+```c
+typedef struct Student Student;
+
+Student student = {"Bob", 22};
+```
+
+The alias avoids writing `struct Student` every time. The `typedef` does not create a new, distinct type by itself; it gives an existing type another name.
+
+---
+
+## 13. Input and output
+
+Standard I/O functions are declared in `<stdio.h>`.
+
+### Standard output
+
+```c
+printf("Hello, %s!\n", "world");
+printf("Value: %d\n", 42);
+puts("A line of text");
+```
+
+- `printf()` supports formatted output.
+- `puts()` writes a string followed by a newline.
+
+### Standard input with `scanf()`
+
+```c
+int age;
+
+if (scanf("%d", &age) != 1) {
+    fprintf(stderr, "Expected an integer.\n");
+    return EXIT_FAILURE;
+}
+```
+
+`scanf()` needs the address of `age` so it can store the value there. Always check its return value; it reports how many input items were successfully assigned.
+
+### Standard file descriptors
+
+On Unix-like systems, the conventional standard descriptors are:
+
+```text
+0 → stdin   (standard input)
+1 → stdout  (standard output)
+2 → stderr  (standard error)
+```
+
+### File I/O
+
+```c
+#include <stdio.h>
+
+int main(void)
+{
+    FILE *fp = fopen("data.txt", "w");
+    if (fp == NULL) {
+        perror("fopen");
+        return 1;
+    }
+
+    if (fprintf(fp, "hello\n") < 0) {
+        perror("fprintf");
+        fclose(fp);
+        return 1;
+    }
+
+    if (fclose(fp) == EOF) {
+        perror("fclose");
+        return 1;
+    }
 
     return 0;
 }
 ```
 
-`global_count` has file scope and static storage duration.
-
-`local_count` has block scope and automatic storage duration.
-
----
-
-# Functions
-
-Functions provide reusable units of execution.
-
-Example:
-
-```c
-int add(int a, int b)
-{
-    return a + b;
-}
-```
-
-Calling:
-
-```c
-int result = add(2, 3);
-```
-
-Functions have:
-
-* return type
-* name
-* parameters
-* body
-
-Example:
-
-```c
-int multiply(int a, int b)
-{
-    return a * b;
-}
-```
-
-A function returning no value can use:
-
-```c
-void
-```
-
-Example:
-
-```c
-void greet(void)
-{
-    printf("Hello\n");
-}
-```
+- `fopen()` opens a file and returns a `FILE *` stream.
+- `fprintf()` writes formatted output to the stream.
+- `fclose()` closes the stream and may report a write/close error.
 
 ---
 
-# Processes
+## 14. Preprocessor and headers
 
-A process is a running instance of a program.
+The preprocessor handles directives before the compiler compiles the C code.
 
-A Linux process has information such as:
+```c
+#include <stdio.h>
+#include <stdlib.h>
 
-* PID
-* PPID
-* memory mappings
-* file descriptors
-* environment
-* execution state
-* user and group identity
+#define MAX_ITEMS 100
+```
 
-A useful model:
+- `#include` brings declarations from a header into the translation unit.
+- `#define` defines a macro.
+
+### Macro example
+
+```c
+#define SQUARE(x) ((x) * (x))
+
+int result = SQUARE(4); // 16
+```
+
+Parentheses help preserve intended grouping, but macros can still be tricky: `SQUARE(i++)` evaluates its argument more than once and is unsafe. Prefer a function when appropriate.
+
+---
+
+## 15. Processes on Linux
+
+A **program** is executable code; a **process** is an instance of a program being executed.
+
+A process has operating-system-managed information such as:
+
+- PID (process ID)
+- PPID (parent process ID)
+- virtual memory mappings
+- file descriptors
+- environment and execution state
+
+Useful Linux commands:
+
+```bash
+ps -ef
+ps aux
+ps -p <PID> -o pid,ppid,stat,cmd
+```
+
+Replace `<PID>` with a real process ID.
+
+### `getpid()` and `getppid()`
+
+These POSIX functions are declared in `<unistd.h>`.
+
+```c
+printf("PID = %d\n", (int)getpid());
+printf("PPID = %d\n", (int)getppid());
+```
+
+- `getpid()` returns the current process ID.
+- `getppid()` returns the current parent process ID.
+
+The cast makes the value match the `%d` format specifier for this Linux-oriented example.
+
+---
+
+## 16. `fork()`
+
+`fork()` is a POSIX function available on Unix-like systems. It creates a child process based on the calling process.
+
+```c
+#include <sys/types.h>
+#include <unistd.h>
+
+pid_t pid = fork();
+```
+
+After a successful call, both parent and child continue from the statement after `fork()`, but the return value differs:
+
+- **Child:** `fork()` returns `0`.
+- **Parent:** `fork()` returns the child's PID (a positive value).
+- **Failure:** `fork()` returns `-1` in the parent and no child is created.
 
 ```text
-Program
-   ↓
-execution
-   ↓
-Process
-   ↓
-PID
+Before fork:
+    Process A
+        |
+      fork()
+      /    \
+Parent    Child
 ```
+
+The parent and child have separate process identities and separate virtual address spaces. The child initially inherits the parent's process state; operating systems commonly use copy-on-write to avoid eagerly copying every memory page.
+
+### Small `fork()` example
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int main(void)
+{
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("fork");
+        return EXIT_FAILURE;
+    }
+
+    if (pid == 0) {
+        printf("Child: PID=%d, PPID=%d\n",
+               (int)getpid(), (int)getppid());
+    } else {
+        printf("Parent: PID=%d, child PID=%d\n",
+               (int)getpid(), (int)pid);
+    }
+
+    return EXIT_SUCCESS;
+}
+```
+
+### Parent/child execution order
+
+`fork()` does not guarantee which process runs first. Output may appear as parent then child, or child then parent. The scheduler determines when each runnable process gets CPU time. If one process must wait for another, use synchronization such as `waitpid()` rather than relying on `sleep()` or expected output order.
 
 ---
 
-# `fork()`
+## 17. Waiting for a child with `waitpid()`
 
-`fork()` is a POSIX function used on Unix-like systems to create a new process.
+`waitpid()` lets a parent wait for a particular child to change state; with options `0`, it waits for that child to terminate. It also allows the parent to collect the child's termination status.
 
 Include:
 
 ```c
+#include <sys/types.h>
+#include <sys/wait.h>
+```
+
+Example:
+
+```c
+int status;
+pid_t result = waitpid(child_pid, &status, 0);
+
+if (result == -1) {
+    perror("waitpid");
+    return EXIT_FAILURE;
+}
+
+if (WIFEXITED(status)) {
+    printf("Child exit code: %d\n", WEXITSTATUS(status));
+} else {
+    puts("Child did not exit normally.");
+}
+```
+
+- `child_pid`: the child to wait for.
+- `&status`: address where the wait status is stored.
+- `0`: no special options; wait for termination.
+- `WIFEXITED(status)`: true if the child terminated normally via `exit()` or a return from `main()`.
+- `WEXITSTATUS(status)`: extracts the exit code; use it only if `WIFEXITED(status)` is true.
+
+### Complete `fork()` + `waitpid()` example
+
+This matches the process experiment covered so far.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
-```
 
-Example:
-
-```c
-pid_t pid = fork();
-```
-
-After a successful `fork()`, there are two processes:
-
-```text
-             Parent
-             PID 1000
-                |
-              fork()
-             /      \
-            /        \
-     Parent 1000    Child 1001
-```
-
-The child is created from the calling process.
-
----
-
-# `fork()` Return Value
-
-`fork()` returns different values in the parent and child.
-
-### In the child
-
-```c
-pid == 0
-```
-
-### In the parent
-
-```c
-pid > 0
-```
-
-The value returned to the parent is the child's PID.
-
-### On failure
-
-```c
-pid < 0
-```
-
-Example:
-
-```c
-pid_t pid = fork();
-
-if (pid < 0)
+int main(void)
 {
-    perror("fork");
-    return 1;
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("fork");
+        return EXIT_FAILURE;
+    }
+
+    if (pid == 0) {
+        printf("Child process\n");
+        printf("PID  = %d\n", (int)getpid());
+        printf("PPID = %d\n", (int)getppid());
+        sleep(2);  // gives time to observe the child while it exists
+        return 7;  // child's exit code for this experiment
+    }
+
+    int status;
+    pid_t terminated_pid = waitpid(pid, &status, 0);
+
+    if (terminated_pid == -1) {
+        perror("waitpid");
+        return EXIT_FAILURE;
+    }
+
+    if (WIFEXITED(status)) {
+        printf("Child %d exited with code %d\n",
+               (int)terminated_pid, WEXITSTATUS(status));
+    } else {
+        printf("Child %d did not exit normally\n", (int)terminated_pid);
+    }
+
+    printf("Parent PID = %d\n", (int)getpid());
+    printf("Child PID  = %d\n", (int)pid);
+
+    return EXIT_SUCCESS;
 }
 ```
 
-Then:
+The parent waits while the child sleeps. Once the child exits, `waitpid()` returns and the parent can report the exit code (`7` in this example).
 
-```c
-if (pid == 0)
-{
-    // child
-}
-else
-{
-    // parent
-}
-```
-
-The same source code therefore executes in two separate processes, but each process receives a different return value from `fork()`.
+A `sleep()` call is useful for observation during this lab, but it is not a general synchronization mechanism. `waitpid()` is what guarantees the parent waits for the specified child to terminate.
 
 ---
 
-# `getpid()`
+## 18. File descriptors
 
-```c
-getpid()
-```
+A **file descriptor (FD)** is a small non-negative integer that a process uses to refer to an open resource managed by the operating system.
 
-returns the process ID of the calling process.
-
-Example:
-
-```c
-printf("PID = %d\n", getpid());
-```
-
----
-
-# `getppid()`
-
-```c
-getppid()
-```
-
-returns the process ID of the current process's parent.
-
-Example:
-
-```c
-printf("PPID = %d\n", getppid());
-```
-
-Conceptually:
-
-```text
-PID
-→ identity of the current process
-
-PPID
-→ identity of its parent process
-```
-
----
-
-# Parent and Child Execution Order
-
-`fork()` does not guarantee which process executes first after the fork.
-
-For example, this is possible:
-
-```text
-Parent
-Child
-```
-
-But this is also possible:
-
-```text
-Child
-Parent
-```
-
-After `fork()` both processes may be runnable, and the operating-system scheduler determines when each gets CPU time.
-
-Therefore:
-
-> The order in which parent and child print output is not guaranteed.
-
-Example:
-
-```c
-if (pid == 0)
-{
-    printf("Child\n");
-}
-else
-{
-    printf("Parent\n");
-}
-```
-
-Seeing:
-
-```text
-Parent
-Child
-```
-
-does **not** mean the parent always runs first.
-
-It only describes that particular execution.
-
----
-
-# Process Observation with `/proc`
-
-On Linux, process information can be inspected through:
-
-```text
-/proc/<PID>/
-```
-
-Examples:
-
-```bash
-ls -l /proc/<PID>
-```
-
-Useful entries include:
-
-```text
-/proc/<PID>/status
-/proc/<PID>/fd/
-/proc/<PID>/maps
-/proc/<PID>/cmdline
-```
-
-This connects C process creation with Linux process inspection:
-
-```text
-C program
-   ↓
-fork()
-   ↓
-parent + child
-   ↓
-different PIDs
-   ↓
-/proc/<PID>
-```
-
----
-
-# File Descriptors
-
-A file descriptor (FD) is a small integer used by a process to refer to an open operating-system resource.
-
-The standard file descriptors are:
+Conventional descriptors:
 
 ```text
 0 → stdin
@@ -977,372 +882,145 @@ The standard file descriptors are:
 2 → stderr
 ```
 
-Example:
+A process may have more descriptors for files, pipes, sockets, devices, and other resources.
 
-```text
-0 → terminal input
-1 → terminal output
-2 → terminal error output
-```
+For example, `printf()` writes to standard output, conventionally FD `1`.
 
-A process may have additional descriptors referring to:
-
-* files
-* pipes
-* sockets
-* devices
-* other kernel-managed resources
-
-For example:
-
-```text
-FD 3 → socket
-```
-
-On Linux, these can be inspected through:
+A process's file descriptors are visible on Linux under:
 
 ```bash
 ls -l /proc/<PID>/fd
 ```
 
-Example:
+Example output might contain:
 
 ```text
+0 -> /dev/pts/1
+1 -> /dev/pts/1
+2 -> /dev/pts/1
 3 -> socket:[66597]
 ```
 
-This gives an important systems-level model:
+Here FD `3` refers to a socket. The number is a descriptor in that process; `socket:[66597]` is Linux's representation of the underlying socket object.
+
+Conceptual model:
 
 ```text
 Process
    ↓
-File Descriptor
+File descriptor
    ↓
-Kernel Resource
-```
-
-For networking:
-
-```text
-Process
-   ↓
-FD
-   ↓
-Socket
-   ↓
-TCP / UDP
+Kernel-managed resource
 ```
 
 ---
 
-# C and the Operating System
+## 19. Linux `/proc` process inspection
 
-C is particularly useful for systems programming because it provides relatively direct access to:
+`/proc` is a Linux virtual filesystem exposing information about processes and kernel state. It is not an ordinary directory of static files.
 
-* memory
-* pointers
-* arrays
-* processes
-* file descriptors
-* system calls
-* binary data
+For a process with PID `1234`, examples include:
 
-This makes C valuable for understanding:
+```bash
+ls /proc/1234
+cat /proc/1234/status
+ls -l /proc/1234/fd
+cat /proc/1234/cmdline
+cat /proc/1234/maps
+```
+
+Useful entries:
+
+- `/proc/<PID>/status`: process state and identity information, including IDs and memory-related fields.
+- `/proc/<PID>/fd/`: symbolic links representing the process's open file descriptors.
+- `/proc/<PID>/cmdline`: command-line arguments used to start the process (represented with null separators).
+- `/proc/<PID>/maps`: memory mappings for the process.
+
+Access to some process information can be restricted by permissions or system settings.
+
+This connects process creation in C to observation through Linux:
 
 ```text
-Operating systems
-Networking
-Reverse engineering
-Binary analysis
-Systems security
-Memory vulnerabilities
+C program
+   ↓
+fork()
+   ↓
+parent + child processes
+   ↓
+PIDs
+   ↓
+/proc/<PID>
 ```
 
 ---
 
-# Security Connection
+## 20. Compilation with GCC
 
-C gives programmers significant control and responsibility.
-
-Incorrect memory handling can lead to:
-
-* crashes
-* memory corruption
-* unintended data modification
-* invalid control flow
-* security vulnerabilities
-
-Important vulnerability classes include:
-
-```text
-buffer overflow
-out-of-bounds access
-use-after-free
-double free
-heap corruption
-invalid pointer dereference
-```
-
-Understanding C memory, pointers, processes, and file descriptors is therefore foundational for systems security.
-
-The important progression is:
-
-```text
-Memory
-   ↓
-Pointers
-   ↓
-Memory safety
-   ↓
-Processes
-   ↓
-File descriptors
-   ↓
-System calls
-   ↓
-Operating-system behavior
-   ↓
-Security
-```
-
----
-
-# Practical Memory Experiment
-
-Example:
-
-```c
-#include <stdio.h>
-
-int main(void)
-{
-    int a = 10;
-    char b = 'A';
-    int c = 20;
-
-    printf("a = %d\n", a);
-    printf("b = %c\n", b);
-    printf("c = %d\n", c);
-
-    printf("&a = %p\n", (void *)&a);
-    printf("&b = %p\n", (void *)&b);
-    printf("&c = %p\n", (void *)&c);
-
-    printf("sizeof(a) = %zu\n", sizeof(a));
-    printf("sizeof(b) = %zu\n", sizeof(b));
-    printf("sizeof(c) = %zu\n", sizeof(c));
-
-    return 0;
-}
-```
-
-This demonstrates:
-
-```text
-variable → value
-&a       → address
-sizeof   → object size
-```
-
-The addresses of variables declared next to each other in source code should not be assumed to be adjacent or in source order.
-
----
-
-# Practical Pointer Experiment
-
-```c
-#include <stdio.h>
-
-int main(void)
-{
-    int a = 10;
-    int *p = &a;
-
-    printf("a  = %d\n", a);
-    printf("&a = %p\n", (void *)&a);
-
-    printf("p  = %p\n", (void *)p);
-    printf("*p = %d\n", *p);
-
-    return 0;
-}
-```
-
-Conceptually:
-
-```text
-a
-│
-│ contains 10
-▼
-memory location
-
-p
-│
-│ contains address of a
-▼
-&a
-```
-
-Therefore:
-
-```text
-a   → value of a
-&a  → address of a
-p   → address stored in p
-*p  → value at that address
-&p  → address of p itself
-```
-
----
-
-# Practical `fork()` Experiment
-
-```c
-#include <stdio.h>
-#include <unistd.h>
-
-int main(void)
-{
-    pid_t pid = fork();
-
-    if (pid < 0)
-    {
-        perror("fork");
-        return 1;
-    }
-
-    if (pid == 0)
-    {
-        printf("Child process\n");
-        printf("PID = %d\n", getpid());
-        printf("PPID = %d\n", getppid());
-    }
-    else
-    {
-        printf("Parent process\n");
-        printf("PID = %d\n", getpid());
-        printf("Child PID = %d\n", pid);
-    }
-
-    return 0;
-}
-```
-
-Possible output:
-
-```text
-Parent process
-PID = 23836
-Child PID = 23837
-Child process
-PID = 23837
-PPID = 23836
-```
-
-This does not imply that the parent always executes first.
-
-Another execution may produce the child output first.
-
----
-
-# Compilation
-
-A basic C program can be compiled with GCC:
+Basic compile-and-run workflow:
 
 ```bash
 gcc program.c -o program
-```
-
-Run it with:
-
-```bash
 ./program
 ```
 
-Useful warning flags:
+Recommended warnings while learning:
 
 ```bash
 gcc -Wall -Wextra -Wpedantic program.c -o program
 ```
 
-Warnings are valuable because they can reveal possible bugs before runtime.
+Meaning:
 
-During security-oriented development, compiler warnings should generally be treated seriously rather than ignored.
+- `gcc`: compiler driver.
+- `-Wall`: enables many common warnings (not literally every warning).
+- `-Wextra`: enables additional warnings.
+- `-Wpedantic`: warns about certain non-standard extensions relative to the selected standard.
+- `program.c`: input source file.
+- `-o program`: names the output executable `program`.
+- `./program`: runs the executable in the current directory.
+
+Conceptually, building a program involves preprocessing, compiling, assembling, and linking. GCC coordinates these stages; some may be combined internally.
+
+Warnings are worth understanding rather than automatically ignoring. They often help find mistakes before the program runs.
 
 ---
 
-# Quick Recap
+## 21. Quick reference
 
-### Variables
+### Variables and memory
 
 ```text
-name
-type
-value
-storage
+object        → an instance of a type stored somewhere
+&object       → address of an object
+pointer        → stores a pointer value, commonly an address
+*pointer       → accesses the pointed-to object
+sizeof(object) → size in bytes
 ```
 
-### Memory
+### Arrays and strings
 
 ```text
-code
-static/global data
-heap
-stack
-```
-
-### Pointers
-
-```text
-pointer → stores an address
-*pointer → accesses pointed-to object
-&object → obtains address
-```
-
-### Arrays
-
-```text
-same-type elements
-stored contiguously
-no automatic bounds checking
+array[index]   → element at index (starts at 0)
+C string       → char sequence ending with '\0'
+strlen(s)      → string length excluding '\0'
 ```
 
 ### Dynamic memory
 
 ```text
-malloc
-   ↓
-use
-   ↓
-free
+malloc()  → allocate storage
+calloc()  → allocate and zero-initialize bytes
+realloc() → resize an allocation
+free()    → release allocated storage
 ```
 
-### Processes
+### Process functions
 
 ```text
-program
-   ↓
-process
-   ↓
-PID
-```
-
-### `fork()`
-
-```text
-one process
-   ↓
-fork()
-   ↓
-parent + child
-```
-
-### Process identity
-
-```text
-getpid()  → current PID
-getppid() → parent PID
+fork()     → create a child process (POSIX)
+getpid()   → current process ID
+getppid()  → parent process ID
+waitpid()  → wait for a child and collect its status
 ```
 
 ### File descriptors
@@ -1351,56 +1029,12 @@ getppid() → parent PID
 0 → stdin
 1 → stdout
 2 → stderr
-3+ → additional resources
+3+ → other open resources (not guaranteed to start at 3 in every situation)
 ```
 
-### Linux process inspection
+### Compile
 
-```text
-/proc/<PID>/
+```bash
+gcc -Wall -Wextra -Wpedantic source.c -o program
+./program
 ```
-
-### Core systems model
-
-```text
-Program
-   ↓
-Process
-   ↓
-PID
-   ↓
-File Descriptors
-   ↓
-Kernel Resources
-   ↓
-Memory / Files / Sockets / Pipes
-```
-
----
-
-# Security Mindset
-
-When dealing with low-level C and operating-system behavior, keep asking:
-
-```text
-What object am I accessing?
-Where does it live?
-How long does it exist?
-Who owns it?
-What happens if I access it incorrectly?
-What does the operating system do underneath?
-```
-
-That mindset will become increasingly important when moving into:
-
-```text
-memory corruption
-debugging
-reverse engineering
-binary exploitation
-system calls
-privilege boundaries
-process internals
-```
-
-This foundation is what turns C from a syntax exercise into a tool for understanding how software actually works.

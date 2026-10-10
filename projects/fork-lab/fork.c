@@ -1,5 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 /*
  * This program demonstrates the behavior of fork() in Unix-like systems.
@@ -41,24 +44,58 @@ int main() {
         printf("Child process\n");
         printf("PID = %d\n", getpid());
         printf("PPID = %d\n", getppid());
+
+        sleep(2);
     }
     else {
+        /*
+         * The parent waits for the child to exit and inspects its exit status.
+         * This prevents orphaned child processes and lets the parent report
+         * whether the child ended normally or with an error.
+         */
+        int status;
+        pid_t terminated_pid = waitpid(pid, &status, 0);
+
+        if (terminated_pid == -1) {
+            /*
+             * waitpid() failed; report the OS-level error to the user.
+             */
+            perror("waitpid failed");
+            return EXIT_FAILURE;
+        }
+
+        if (WIFEXITED(status)) {
+            /*
+             * The child exited normally. WEXITSTATUS() extracts its exit code.
+             */
+            int exit_code = WEXITSTATUS(status);
+            printf("Child %d terminated normally with exit code: %d\n", terminated_pid, exit_code);
+        } else {
+            /*
+             * The child did not terminate normally, such as by a signal.
+             */
+            printf("Child %d did not terminate normally.\n", terminated_pid);
+        }
+
         /*
          * This block runs only in the parent process.
          * The parent can identify the child by the PID returned by fork().
          * The parent also has its own PID, which is different from the child.
          */
+        
+        /*
+         * Delay the parent briefly so the child has time to complete its work
+         * before the parent prints its own process information.
+         */
+        sleep(2);
+
         printf("Parent process\n");
         printf("PID = %d\n", getpid());
         printf("Child PID = %d\n", pid);
     }
 
     /*
-     * sleep(30) keeps both processes alive for 30 seconds so the user can
-     * observe both the parent and child outputs before the program exits.
-     * In real programs, the parent and child may perform different tasks
-     * concurrently during this interval.
+     * Exit the process cleanly with a success status.
      */
-    sleep(30);
     return 0;
 }
