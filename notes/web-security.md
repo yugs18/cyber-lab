@@ -1,4 +1,4 @@
-# Web Security Notes: Attack-Surface Mapping
+# Web Security Notes: HTTP, Attack-Surface Mapping, and Burp Suite
 
 These notes cover HTTP revision and the first steps in mapping a web application's attack surface. They are organized by topic, not by study day.
 
@@ -307,3 +307,155 @@ Evidence       → what the response actually demonstrates
 ```
 
 The useful investigation habit is: map what exists, make a clear hypothesis, change one variable at a time, record the response, and avoid claiming more than the evidence supports.
+
+## 11. Burp Suite: Proxy and HTTP history
+
+Burp Suite is an intercepting proxy used to inspect and test traffic between a client (such as a browser) and a web server. In this lab, Burp is used only with the local application at `127.0.0.1:8000`.
+
+### The traffic flow
+
+```text
+Burp's built-in browser
+        |
+        | HTTP request
+        v
+Burp Proxy listener
+        |
+        | forwards the request
+        v
+Local Python HTTP server (127.0.0.1:8000)
+        |
+        | HTTP response
+        v
+Burp Proxy
+        |
+        v
+Burp's built-in browser
+```
+
+Burp can pause a request before forwarding it, let you inspect or modify it, and then forward or drop it. Its HTTP history is a record of the requests and responses that passed through the proxy.
+
+### Important distinction: `curl` versus Burp's browser
+
+A request made directly by `curl` does **not** automatically pass through Burp. To see a request in Burp's HTTP history, send it through Burp—for this exercise, use Burp's built-in browser. That browser is already configured to use Burp's proxy.
+
+### Start the local target
+
+Keep the local server running in one terminal:
+
+```bash
+cd ~/cyber-lab/projects/attack-surface
+python3 -m http.server 8000 --bind 127.0.0.1 --directory site
+```
+
+Verify in another terminal if needed:
+
+```bash
+curl -i http://127.0.0.1:8000/
+```
+
+The local target is plain HTTP, so a Burp CA certificate is not needed for this exercise. Do not switch to unrelated or public targets for this lab.
+
+### Open the browser and inspect traffic
+
+1. Start Burp Suite Community Edition.
+2. Open **Proxy → Intercept**.
+3. Select **Open browser**. Use that browser for the requests below.
+4. Initially set **Intercept off** so requests can complete without pausing.
+5. Visit `http://127.0.0.1:8000/` and confirm the page loads.
+6. Open **Proxy → HTTP history**. Select the request and inspect both the request and response panels.
+7. Turn **Intercept on** and visit `http://127.0.0.1:8000/index.html` in the built-in browser. Burp should pause a matching request. Read the request before choosing **Forward** to send it to the server. **Drop** cancels the intercepted request.
+8. Turn **Intercept off** again when finished. Traffic can still be recorded in HTTP history while interception is off.
+
+Interface labels can differ slightly between Burp versions. If the request does not appear, check that you used Burp's built-in browser, that the local server is running, and that the target URL is exactly `http://127.0.0.1:8000/`.
+
+### Intercept controls
+
+| Control | Meaning |
+|---|---|
+| **Intercept on** | Pause matching requests so you can inspect them before they are sent. |
+| **Forward** | Send the currently intercepted request onward. |
+| **Drop** | Cancel the currently intercepted request instead of sending it. |
+| **Intercept off** | Stop pausing requests; the proxy can forward traffic normally. HTTP history can still record it. |
+
+Do not treat an intercepted request as completed until it has been forwarded and you have observed the response.
+
+### HTTP history: what to inspect
+
+For each history item, inspect the request and the corresponding response. Record the evidence that is actually visible.
+
+**Request side**
+
+- Method, such as `GET`
+- Path and query string
+- Host
+- Request headers such as `User-Agent` and `Accept`
+- Cookies or body fields, if present (do not publish real secrets or tokens)
+
+**Response side**
+
+- Status code
+- Response headers, especially `Content-Type`, `Content-Length`, and `Server` if present
+- Response body and whether it resembles the expected page or an error page
+
+HTTP history may also display fields such as status, length, MIME type, and parameters in its table. A missing header is simply an observation; do not infer a vulnerability from its absence alone.
+
+### Five local HTTP exchanges to document
+
+Use Burp's built-in browser with **Intercept off** for these requests so they complete normally. Wait for the page or response, then select the matching entry in **Proxy → HTTP history**.
+
+| # | URL | What to compare |
+|---|---|---|
+| 1 | `http://127.0.0.1:8000/` | How the server handles the root path. |
+| 2 | `http://127.0.0.1:8000/index.html` | Root path versus explicit file path. |
+| 3 | `http://127.0.0.1:8000/?source=day4` | Whether the query string is present and whether the response differs. |
+| 4 | `http://127.0.0.1:8000/missing` | The response for a path that should not exist. |
+| 5 | `http://127.0.0.1:8000/?source=proxy-lab` | Compare a second query value with the first query test. |
+
+The expected results are hypotheses, not completed observations. Record your actual status, headers, and response in Burp. With Python's simple static-file server, the root and `index.html` will commonly return the same page, query strings generally will not alter the static content, and a missing path commonly returns `404`. Verify rather than assume.
+
+### Exchange log template
+
+Copy one block for each of the five exchanges into `~/cyber-lab/notes/web-security.md`:
+
+```markdown
+### HTTP Exchange 1 — Root Path
+- **Request:** `GET /`
+- **Target:** `127.0.0.1:8000`
+- **Query parameters:** None
+- **Status:** [record the observed status]
+- **Content-Type:** [record the observed value, or `Not present`]
+- **Other useful headers:** [record actual values]
+- **Response body:** [brief description]
+- **Observation:** [what you noticed]
+- **Conclusion:** [what the evidence supports]
+- **Open question:** [what you still do not know]
+```
+
+For other exchanges, update the title, method/path, and query parameters as appropriate. Do not fill in status codes or header values from memory; use the actual Burp response.
+
+### Investigation habits
+
+- Compare like with like: inspect the same fields for each exchange.
+- Change one variable at a time. For example, compare `/` with `/?source=day4` to investigate the query string while keeping the host and method the same.
+- Separate observation from interpretation. “The response status is `404`” is an observation; “the endpoint is vulnerable” is not supported by that fact alone.
+- Do not claim a server-side feature exists just because a parameter appears in the URL.
+- Use only the local lab target unless you have explicit authorization for another system.
+- Keep real credentials, session cookies, authorization headers, and tokens out of committed notes.
+
+### Session 2 completion checklist
+
+- [ ] Opened Burp's built-in browser.
+- [ ] Sent traffic through Burp and located it in HTTP history.
+- [ ] Explained the difference between Intercept on and Intercept off.
+- [ ] Inspected at least one request and its response.
+- [ ] Tried **Forward** on an intercepted request.
+- [ ] Documented five exchanges using actual observations.
+
+## 12. Official references
+
+- [Burp Suite: Getting started](https://portswigger.net/burp/documentation/desktop/getting-started)
+- [Intercepting HTTP traffic](https://portswigger.net/burp/documentation/desktop/getting-started/intercepting-http-traffic)
+- [Proxy: HTTP history](https://portswigger.net/burp/documentation/desktop/tools/proxy/http-history)
+- [Burp's browser](https://portswigger.net/burp/documentation/desktop/tools/burps-browser)
+
