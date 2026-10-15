@@ -1,731 +1,270 @@
 # HTTPPeek
 
-HTTPPeek is a small Python HTTP inspection utility built using Python's standard library.
+HTTPPeek is a small command-line HTTP inspection tool written in Python using the standard library. It sends a GET request to an HTTP or HTTPS URL and reports parsed URL details, response metadata, elapsed time, response-body size, and whether the final destination differs from the original URL.
 
-It accepts a target URL, sends an HTTP or HTTPS request, and displays useful information from the server's response, including the status code, common response headers, response time, response size, and whether the request was redirected.
-
-The response body is also saved to a local file based on its reported content type.
-
-The project is intended primarily for learning **HTTP, Python networking, response handling, and basic web reconnaissance concepts**.
-
----
+The project is intended for learning HTTP, URL parsing, Python networking, and practical web-security testing against systems you own or are authorized to test.
 
 ## Features
 
-HTTPPeek currently:
-
-- accepts exactly one target URL
-- validates whether the URL uses `http` or `https`
-- sends a request using Python's standard library
-- identifies itself with a custom `User-Agent`
-- reports the HTTP status code
-- displays common response headers
-- measures response time
-- measures response body size
-- detects whether the final URL differs from the original URL
-- saves the response body to a file
-- handles HTTP and URL-related errors
-
----
+- Accepts a URL as a command-line argument.
+- Supports `http` and `https` URLs.
+- Parses and displays the scheme, hostname, effective port, path, and query parameters.
+- Preserves repeated query keys and empty query values when displaying parsed parameters.
+- Sends a GET request with the user-agent `CyberLab-httppeek`.
+- Supports a configurable request timeout.
+- Displays the HTTP status code and reason phrase.
+- Displays selected response headers: `Server`, `Content-Type`, `Content-Length`, and `Location`.
+- Measures elapsed time through reading the response body.
+- Calculates response-body size from the bytes received.
+- Reports the final URL and whether it differs from the original destination after URL normalization.
+- Handles HTTP error responses (for example, 404) separately from network errors.
+- Optionally saves the response body to a file.
+- Uses Python's `argparse` for command-line argument parsing and help output.
 
 ## Requirements
 
-- Python 3.x
-- Network connectivity for remote targets
+- Python 3.10 or newer is recommended.
+- No third-party Python packages are required.
+- Network access to the target is required for requests. The examples below use a local practice server.
 
-HTTPPeek uses only Python's standard library, so no external Python packages are required.
+## Project layout
 
----
+A simple layout is:
+
+```text
+httppeek/
+├── httppeek.py
+├── README.md
+└── tests/
+    ├── test_httppeek.py
+    └── test_httppeek_requests.py
+```
+
+The two test files are present if you created the unit and integration tests described during development.
 
 ## Usage
 
-```bash
-python3 httppeek.py <url>
-```
+Run commands from the directory containing `httppeek.py`.
 
-Example:
+### Show help
 
 ```bash
-python3 httppeek.py http://127.0.0.1:8000
+python3 httppeek.py --help
 ```
 
-HTTPS example:
+### Inspect a URL
 
 ```bash
-python3 httppeek.py https://example.com
+python3 httppeek.py http://127.0.0.1:8000/
 ```
 
----
+### Set the timeout
 
-## Local Testing
-
-A simple way to test HTTPPeek safely is to run a local HTTP server.
-
-Start the server:
+The default timeout is 5 seconds. Pass `--timeout` to use a different positive number of seconds:
 
 ```bash
-python3 -m http.server 8000
+python3 httppeek.py --timeout 10 http://127.0.0.1:8000/
 ```
 
-Then, from another terminal:
+A non-positive timeout is rejected by the argument parser.
+
+### Save the response body
 
 ```bash
-python3 httppeek.py http://127.0.0.1:8000
+python3 httppeek.py --save-body http://127.0.0.1:8000/
 ```
 
-This creates a simple local communication path:
+With `--save-body`, HTTPPeek writes the received body to a file in the **current working directory**. A successful response uses a name such as `response.html`; an HTTP error response uses a name such as `response-404.html`. The extension is based on the response's MIME subtype, so it should be treated as a convenient label rather than a guarantee about the file's contents.
 
-```text
-HTTPPeek
-    |
-    | HTTP Request
-    ↓
-127.0.0.1:8000
-    |
-    ↓
-Python HTTP Server
-    |
-    | HTTP Response
-    ↓
-HTTPPeek
-```
+**Caution:** successful responses with the same MIME subtype use the same filename and can overwrite a previous file. Run separate tests from separate directories or move/rename the saved file between requests if you need to keep multiple response bodies.
 
-Using a local server makes it possible to experiment without depending on a third-party system.
+## Example output
 
----
-
-## Example Output
-
-A successful request may produce output similar to:
+Output varies with the target server and the actual response. A typical successful request may look like this:
 
 ```text
 ===========================
-      HTTPPEEK v0.3
+      HTTPPEEK
 ===========================
-URL: http://127.0.0.1:8000
-HTTP
-Status: 200
-Server: SimpleHTTP/...
-Content-Type: text/html; charset=utf-8
-Content-Length: ...
+Original URL: http://127.0.0.1:8000/
+Scheme: http
+Hostname: 127.0.0.1
+Port: 8000
+Path: /
+Query parameters: None
+
+Status: 200 OK
+Server: SimpleHTTP/0.6 Python/3.x
+Content-Type: text/html
+Content-Length: 135
 Location: Not present
 
-Response Time: 0.003 sec
-Response Size: 1256 bytes
+Response Time: 0.004 sec
+Response Size: 135 bytes
 Redirected: False
-Response saved to response.html
+Final Url: http://127.0.0.1:8000/
 ```
 
-The exact values depend on the server and response.
+The values above are examples, not fixed expected output. Your server's headers, response size, and timing may differ.
+
+## Run a local test server
+
+For practice, serve a local directory rather than testing an application without permission.
+
+In one terminal:
+
+```bash
+cd ~/Desktop/cyber-lab/projects/attack-surface
+python3 -m http.server 8000 --bind 127.0.0.1 --directory site
+```
+
+Keep the server running. In another terminal, go to the HTTPPeek project directory and run:
+
+```bash
+python3 httppeek.py http://127.0.0.1:8000/
+python3 httppeek.py http://127.0.0.1:8000/index.html
+python3 httppeek.py 'http://127.0.0.1:8000/?source=day4&tag=python'
+python3 httppeek.py http://127.0.0.1:8000/missing
+python3 httppeek.py --timeout 2 http://127.0.0.1:8000/
+```
+
+The missing path will usually produce a 404 response. HTTPPeek displays HTTP error details and returns the response body for optional saving; a network failure such as a refused connection is reported separately.
+
+## URL parsing and validation
+
+HTTPPeek rejects schemes other than HTTP and HTTPS and requires a hostname. If the URL omits a port, the displayed effective port is `80` for HTTP or `443` for HTTPS. An explicitly malformed or out-of-range port is rejected.
+
+For example, the URL:
+
+```text
+http://127.0.0.1:8000/search?tag=linux&tag=python&empty=
+```
+
+is parsed into:
+
+- Scheme: `http`
+- Hostname: `127.0.0.1`
+- Port: `8000`
+- Path: `/search`
+- Query parameters: `[('tag', 'linux'), ('tag', 'python'), ('empty', '')]`
+
+## Error handling
+
+HTTPPeek distinguishes these categories:
+
+- **HTTP error response:** The server returned an HTTP status such as `404`. HTTPPeek reports the status and reason, records available response headers and body size, and can save the error response body with `--save-body`.
+- **Network error:** A request could not be completed because of a connection or other URL/network problem. HTTPPeek prints a network-error message and exits with status `1`.
+- **Timeout:** The request exceeded the configured timeout. HTTPPeek prints a timeout message and exits with status `1`.
+- **Invalid input:** Unsupported schemes, missing hostnames, invalid ports, or a non-positive timeout are rejected before the request is made. URL validation exits with status `2`; `argparse` also uses status `2` for command-line argument errors.
+
+## Tests
+
+If the `tests/` files have been created, run them from the project root:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The unit tests cover URL parsing, input validation, and URL comparison. The integration tests use a small local HTTP server to check successful responses, 404 responses, redirects, and timeout behavior. The tests should not need an external website.
+
+## How it works
+
+The program is organized around four main stages:
+
+1. `parse_args()` reads the URL, timeout, and optional body-saving flag.
+2. `parse_and_validate_url()` checks URL structure and returns the parsed components for display.
+3. `fetch_url()` sends the GET request, measures elapsed time, gathers response metadata, detects a changed final destination, and returns the response body and filename.
+4. `display_response()` prints the request URL details and response summary.
+
+`comparable_url()` normalizes URL components used to compare the original URL with the final URL. It ignores fragments, lowercases scheme and hostname, treats default ports as equivalent to omitted ports, and supplies `/` for an empty path. The current implementation reports whether the final destination differs; it does not list every intermediate redirect.
+
+## Current limitations
+
+- HTTPPeek currently sends GET requests only; it does not let the user select another HTTP method.
+- It prints selected response headers rather than every header.
+- `--save-body` writes to the current directory and does not accept a custom output path.
+- A successful response may overwrite an earlier `response.<subtype>` file with the same MIME subtype.
+- The chosen filename extension is inferred from the MIME subtype and does not guarantee the response is a valid file of that type.
+- Redirect reporting identifies a change in the final destination, not the number of redirects or intermediate locations.
+- The reported response time includes reading the response body; it is not strictly the time until the first response byte arrives.
+- The response body is read into memory before it is displayed or saved, so very large responses can consume significant memory.
+- The tool is an educational inspection utility, not a full vulnerability scanner or proof that a target is secure.
+
+## Safe use
+
+Use HTTPPeek against your own services, local labs, or targets for which you have explicit authorization. Keep authentication tokens, cookies, sensitive response bodies, and private data out of committed evidence and screenshots.
 
 ---
 
-## What the Program Does
+## Testing
 
-### 1. Validate command-line input
+`httppeek` uses Python's built-in `unittest` framework to test URL parsing, URL comparison, HTTP responses, redirects, and timeout handling.
 
-HTTPPeek expects exactly one argument after the script name:
+### Run the test suite
+
+From the project root, run:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The command discovers and runs the test files in the `tests/` directory and displays each test result.
+
+### Unit tests
+
+The unit tests verify URL parsing, validation, and comparison logic without making HTTP requests.
+
+**URL parsing and validation**
+
+The tests check that:
+
+- HTTP URLs default to port `80`.
+- HTTPS URLs default to port `443`.
+- Explicit ports and URL paths are parsed correctly.
+- Repeated query parameters and empty parameter values are preserved.
+- Unsupported schemes, missing hostnames, invalid ports, and non-URL inputs are rejected with exit code `2`.
+
+**URL comparison**
+
+The tests verify that:
+
+- Hostname capitalization and explicit default ports do not create false differences.
+- URL fragments are ignored during comparison.
+- Different paths and query strings are recognized as different destinations.
+
+### HTTP integration tests
+
+The integration tests run against a small local HTTP server bound to `127.0.0.1`, using an automatically assigned available port. They do not require access to external websites.
+
+The tests cover:
+
+| Test | Expected behavior |
+|---|---|
+| Successful response | Returns status `200`, response metadata, body, size, elapsed time, and final URL. |
+| HTTP 404 response | Preserves the error status, response body, size, and timing information. |
+| Redirect handling | Follows a local redirect and reports the final URL and redirect status. |
+| Timeout handling | Returns no result when the request exceeds the configured timeout. |
+
+The test server is shut down after the integration tests finish.
+
+### Test organization
+
+The tests can be kept in separate files:
 
 ```text
-python3 httppeek.py <url>
+httppeek/
+├── httppeek.py
+├── README.md
+└── tests/
+    ├── test_httppeek.py
+    └── test_httppeek_requests.py
 ```
 
-If the argument count is incorrect, the program prints usage information and exits.
+- `test_httppeek.py` contains unit tests for URL parsing, validation, and comparison.
+- `test_httppeek_requests.py` contains integration tests for HTTP responses, redirects, and timeouts.
 
----
+### Limitations
 
-### 2. Parse the URL
+These tests do not yet verify the command-line interface's complete behavior, including `--save-body`, the exact contents of saved files, or output formatting from `display_response()`. Those behaviors require additional tests.
 
-The program uses:
-
-```python
-urlparse(url)
-```
-
-to determine the URL scheme.
-
-Supported schemes are:
-
-```text
-http
-https
-```
-
-Any other scheme causes the program to exit with:
-
-```text
-Unknown protocol
-```
-
----
-
-### 3. Create the HTTP request
-
-HTTPPeek creates a request using:
-
-```python
-Request(
-    url,
-    headers={"User-Agent": "CyberLab-httppeek"}
-)
-```
-
-The custom `User-Agent` identifies the client as:
-
-```text
-CyberLab-httppeek
-```
-
-This demonstrates that HTTP request headers are supplied by the client.
-
----
-
-### 4. Send the request
-
-The request is sent using:
-
-```python
-urlopen(request, timeout=5)
-```
-
-The five-second timeout prevents the program from waiting indefinitely for a response.
-
-The response is handled with a context manager:
-
-```python
-with urlopen(request, timeout=5) as response:
-```
-
-This ensures the response resource is properly cleaned up after use.
-
----
-
-### 5. Read the response body
-
-The complete response body is read with:
-
-```python
-body = response.read()
-```
-
-The body is kept in memory so it can later be measured and saved to disk.
-
----
-
-### 6. Measure response time
-
-The program uses:
-
-```python
-time.perf_counter()
-```
-
-to measure elapsed time.
-
-The timer begins before the request and ends after the response body has been read:
-
-```text
-Start timer
-    ↓
-Send request
-    ↓
-Receive response
-    ↓
-Read response body
-    ↓
-Stop timer
-```
-
-This gives a measurement of the time taken for the request and response body to be received.
-
----
-
-### 7. Read the status code
-
-The HTTP status code is obtained from:
-
-```python
-response.status
-```
-
-Example:
-
-```text
-200
-```
-
-The status code provides information about the result of the HTTP request.
-
----
-
-### 8. Read response headers
-
-HTTPPeek extracts these headers:
-
-```text
-Server
-Content-Type
-Content-Length
-Location
-```
-
-The program uses:
-
-```python
-response.headers.get(...)
-```
-
-to retrieve them.
-
-If a header is not present, the program displays:
-
-```text
-Not present
-```
-
-This prevents a missing optional header from causing an unnecessary failure.
-
----
-
-## Response Size
-
-The size of the response body is calculated with:
-
-```python
-response_size = len(body)
-```
-
-Because `body` contains bytes, the result represents the number of bytes stored in the response body.
-
-Example:
-
-```text
-Response Size: 1256 bytes
-```
-
----
-
-## Redirect Detection
-
-HTTPPeek compares:
-
-```python
-final_url = response.url
-```
-
-with the original URL:
-
-```python
-url
-```
-
-Then:
-
-```python
-redirected = final_url != url
-```
-
-If the final URL is different, the program reports:
-
-```text
-Redirected: True
-```
-
-Otherwise:
-
-```text
-Redirected: False
-```
-
-This provides a simple indication that the request ended at a different URL.
-
----
-
-## Saving the Response
-
-HTTPPeek saves the response body to a local file.
-
-The filename is based on the response's content type:
-
-```python
-file_type = response.headers.get_content_type().split('/', 1)[-1]
-filename = "response." + file_type
-```
-
-Examples:
-
-```text
-text/html        → response.html
-application/json → response.json
-image/png        → response.png
-```
-
-The body is written in binary mode:
-
-```python
-with open(filename, "wb") as file:
-    file.write(body)
-```
-
-The saved file can then be inspected separately.
-
----
-
-## Error Handling
-
-HTTPPeek handles two main categories of errors.
-
-### HTTP Errors
-
-```python
-except HTTPError as e:
-```
-
-This handles HTTP-specific error responses such as:
-
-```text
-404 Not Found
-500 Internal Server Error
-```
-
-The program displays:
-
-```text
-[HTTP Error] <status> <reason>
-```
-
-For example:
-
-```text
-[HTTP Error] 404 Not Found
-```
-
----
-
-### URL / Network Errors
-
-```python
-except URLError as e:
-```
-
-This handles URL-related or lower-level problems that prevent the request from completing normally.
-
-The program displays:
-
-```text
-URL Error: <reason>
-```
-
----
-
-# Program Flow
-
-The overall flow of HTTPPeek is:
-
-```text
-Command-line URL
-        ↓
-Validate input
-        ↓
-Parse URL scheme
-        ↓
-Create Request
-        ↓
-Add User-Agent
-        ↓
-Start timer
-        ↓
-urlopen()
-        ↓
-Receive HTTP response
-        ↓
-Read response body
-        ↓
-Stop timer
-        ↓
-Extract status
-        ↓
-Extract headers
-        ↓
-Calculate response size
-        ↓
-Check final URL
-        ↓
-Save response body
-        ↓
-Display results
-```
-
----
-
-# Technologies Used
-
-HTTPPeek uses only Python's standard library.
-
-Main modules:
-
-```python
-urllib.request
-urllib.error
-urllib.parse
-sys
-time
-```
-
-### `urllib.request`
-
-Used for:
-
-- creating HTTP requests
-- sending requests
-- receiving responses
-
-### `urllib.error`
-
-Used for:
-
-- handling `HTTPError`
-- handling `URLError`
-
-### `urllib.parse`
-
-Used for:
-
-- parsing URLs
-- identifying the URL scheme
-
-### `sys`
-
-Used for:
-
-- reading command-line arguments
-- exiting the program
-
-### `time`
-
-Used for:
-
-- measuring response time
-
----
-
-# HTTPPeek and the Network Stack
-
-HTTPPeek operates at the HTTP/application layer, but its communication still depends on the lower networking layers.
-
-Conceptually:
-
-```text
-HTTPPeek
-    ↓
-HTTP
-    ↓
-TCP
-    ↓
-IP
-    ↓
-Network Interface
-```
-
-This connects HTTPPeek with the networking concepts explored in the earlier `PortPeek` project.
-
-`PortPeek` asks:
-
-```text
-Can I establish a TCP connection?
-```
-
-HTTPPeek goes one layer higher:
-
-```text
-Can I communicate using HTTP,
-and what did the server return?
-```
-
----
-
-# Security Relevance
-
-HTTPPeek is intentionally simple, but it introduces concepts used in web reconnaissance and security testing.
-
-The tool begins collecting information such as:
-
-```text
-HTTP status
-Server header
-Content-Type
-Content-Length
-Location
-Response size
-Response time
-```
-
-These observations can provide clues about how a web server behaves.
-
-The broader progression is:
-
-```text
-HTTP request
-      ↓
-HTTP response
-      ↓
-Headers
-      ↓
-Server behavior
-      ↓
-Application clues
-      ↓
-Reconnaissance
-```
-
-The project is not a vulnerability scanner and does not attempt to exploit the target.
-
----
-
-# Security Mindset
-
-When analyzing an HTTP response, ask:
-
-```text
-What exactly did the server return?
-What does this information tell me?
-What does it NOT tell me?
-What assumptions would be unsafe to make?
-```
-
-For example:
-
-```text
-Server: ...
-```
-
-may provide information about the server software, but the presence of that header alone does not prove the exact software version or identify a vulnerability.
-
-Similarly:
-
-```text
-404 Not Found
-```
-
-is an HTTP response, not necessarily a network failure.
-
-The goal is to distinguish:
-
-```text
-Observation
-    ↓
-Evidence
-    ↓
-Interpretation
-```
-
-rather than immediately treating an observation as proof of a vulnerability.
-
----
-
-# Current Limitations
-
-HTTPPeek currently:
-
-- supports one URL per execution
-- supports HTTP and HTTPS
-- uses the standard library only
-- does not perform concurrent requests
-- does not crawl links
-- does not enumerate directories
-- does not identify technologies automatically
-- does not perform vulnerability scanning
-- does not perform authentication testing
-- does not analyze cookies in depth
-- does not inspect security headers as a dedicated feature
-- saves the response using a simple content-type-based filename
-
-These limitations are intentional.
-
-The project is designed to build HTTP and Python networking fundamentals before moving into more advanced web-security tooling.
-
----
-
-# Future Improvements
-
-Possible future versions could include:
-
-```text
-v0.4
-├── detailed redirect information
-├── custom request headers
-├── configurable timeout
-└── improved response-file naming
-
-v0.5
-├── selected response-header analysis
-├── cookie inspection
-├── security-header checks
-└── more structured output
-
-Future
-├── multiple targets
-├── endpoint discovery
-├── technology identification
-└── integration with larger reconnaissance tooling
-```
-
-These features should only be added as the underlying concepts become understood.
-
----
-
-# Responsible Use
-
-HTTPPeek can make requests to remote systems.
-
-Only test systems that you own or systems for which you have explicit permission to perform testing.
-
-For learning, a local target such as:
-
-```text
-127.0.0.1
-```
-
-is preferred.
-
----
-
-# Project Purpose
-
-HTTPPeek is part of a progressive cybersecurity learning environment.
-
-The current project progression is:
-
-```text
-sysprobe
-    ↓
-System information
-
-portpeek
-    ↓
-TCP connectivity
-
-httppeek
-    ↓
-HTTP inspection
-```
-
-This progression builds the following mental model:
-
-```text
-Program
-   ↓
-Process
-   ↓
-Socket
-   ↓
-TCP
-   ↓
-HTTP
-   ↓
-Web Server
-   ↓
-Application
-```
-
-The long-term goal is to understand what is happening underneath security tools rather than relying on them as black boxes.
+Passing the test suite establishes that the tested cases behave as expected; it does not guarantee that every possible URL, server response, or network condition is handled correctly.
