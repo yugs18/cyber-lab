@@ -107,3 +107,21 @@ This was an intentionally vulnerable training application. The result does not e
 
 - Official lab: https://portswigger.net/web-security/access-control/lab-unprotected-admin-functionality
 - PortSwigger access-control learning materials: https://portswigger.net/web-security/access-control
+
+
+## Review Questions
+
+- Vulnerability: What was the actual security failure in the unprotected admin functionality lab?
+- The application exposed administrative functionality without enforcing appropriate server-side authorization.
+
+- Discovery: What did robots.txt reveal, and why is it not an access-control mechanism?
+- The location of the administrative panel was disclosed through `robots.txt`. This file is intended to provide instructions to web crawlers; it is publicly accessible and must not be treated as a security mechanism.
+
+- Authorization: What should the server have checked before allowing the deletion of carlos?
+- The server should verify that the current user is authenticated and has administrator privileges before allowing the deletion. It must enforce this check on the server-side action endpoint.
+
+- Evidence: What observation confirmed that you completed the lab objective?
+- I accessed the exposed administrator panel, deleted the user carlos, and confirmed that PortSwigger Academy marked the lab as solved.
+
+- Responsible reporting: What sensitive information must you redact before publishing Burp evidence?
+- Redact session cookies, Set-Cookie values that contain secrets, authorization tokens, passwords, and other credentials. Redact identifying hostnames or usernames when appropriate for privacy or scope. Keep only the information needed to reproduce and understand the finding.
