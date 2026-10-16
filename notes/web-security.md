@@ -443,15 +443,6 @@ For other exchanges, update the title, method/path, and query parameters as appr
 - Use only the local lab target unless you have explicit authorization for another system.
 - Keep real credentials, session cookies, authorization headers, and tokens out of committed notes.
 
-### Session 2 completion checklist
-
-- [ ] Opened Burp's built-in browser.
-- [ ] Sent traffic through Burp and located it in HTTP history.
-- [ ] Explained the difference between Intercept on and Intercept off.
-- [ ] Inspected at least one request and its response.
-- [ ] Tried **Forward** on an intercepted request.
-- [ ] Documented five exchanges using actual observations.
-
 ## 12. Official references
 
 - [Burp Suite: Getting started](https://portswigger.net/burp/documentation/desktop/getting-started)
@@ -459,3 +450,39 @@ For other exchanges, update the title, method/path, and query parameters as appr
 - [Proxy: HTTP history](https://portswigger.net/burp/documentation/desktop/tools/proxy/http-history)
 - [Burp's browser](https://portswigger.net/burp/documentation/desktop/tools/burps-browser)
 
+---
+
+## Authentication and Authorization
+
+### Authentication
+
+Authentication verifies the identity of a user or service.
+
+### Authorization
+
+Authorization determines whether an identity may perform a specific action
+on a particular resource.
+
+A successful login does not automatically grant access to every record
+or operation.
+
+### Key terms
+
+- Identity: the user or service making a request.
+- Session: state linking successive requests to an authenticated identity.
+- Cookie: browser-managed data that may carry a session identifier.
+- Role: a category of permissions.
+- Object-level authorization: permission to access a specific object.
+- Function-level authorization: permission to perform a specific action.
+
+### Request flow
+
+Browser → Request → Session validation → Identity →
+Authorization check → Action → Response
+
+### Security principle
+
+The server must enforce authorization. Client-controlled request values
+and hidden interface elements are not proof of permission.
+
+---
