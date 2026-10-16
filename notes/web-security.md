@@ -486,3 +486,29 @@ The server must enforce authorization. Client-controlled request values
 and hidden interface elements are not proof of permission.
 
 ---
+
+## Authentication and Session Investigation
+
+- Lab: Username Enumeration via Different Responses
+- Successful login status: `302`
+- Login response `Location` header: Present
+- Login response `Set-Cookie`: Present
+- Cookie on subsequent authenticated request: Present
+- Logout response status: `302`
+- Logout response `Set-Cookie`: Present
+- Cookie expiration directive observed on logout: No
+- Fresh account-page request after logout: Access denied
+
+### Conclusion
+
+The login response redirected the browser and included a `Set-Cookie` header. A subsequent request included a `Cookie` header. The logout response also redirected the browser and included `Set-Cookie`. A fresh account-page request after logout was denied.
+
+These observations are consistent with a session-based authentication flow. They do not, by themselves, establish whether logout invalidated the server-side session or whether the original session identifier would be rejected if reused.
+
+### Limitations
+
+- The exact effect of the logout `Set-Cookie` header has not been established.
+- Server-side invalidation of the original session has not been independently verified.
+- No conclusion about cookie security attributes has been recorded without inspecting them.
+
+---
