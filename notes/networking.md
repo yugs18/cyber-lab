@@ -1663,3 +1663,354 @@ With Wireshark, DNS and TCP traffic may be observable where the capture point pe
 10. What must a secure HTTP client enforce at connection time?
 
 ---
+
+
+---
+
+# Practical Investigation: DNS, HTTPS and Wireshark
+
+This section records a practical investigation using `dig`, `curl`, and Wireshark. Keep observed results separate from interpretation, and update the evidence record if a later run returns different addresses, TTLs, or headers.
+
+## 1. DNS Lookups with `dig`
+
+### Commands used
+
+```bash
+dig -v
+dig example.com A +noall +answer
+dig example.com AAAA +noall +answer
+dig www.example.com CNAME +noall +answer
+```
+
+The installed version reported:
+
+```text
+DiG 9.18.39-0ubuntu0.24.04.8-Ubuntu
+```
+
+### Observed A records
+
+```text
+example.com.        5    IN    A    172.66.147.243
+example.com.        5    IN    A    104.20.23.154
+```
+
+`A` records provide IPv4 address information. Two IPv4 answers were returned in this run.
+
+### Observed AAAA records
+
+```text
+example.com.        5    IN    AAAA    2606:4700:10::6814:179a
+example.com.        5    IN    AAAA    2606:4700:10::ac42:93f3
+```
+
+`AAAA` records provide IPv6 address information. Two IPv6 answers were returned in this run.
+
+### Interpreting the answer fields
+
+For this record:
+
+```text
+example.com.    5    IN    A    172.66.147.243
+```
+
+- `example.com.` is the record name.
+- `5` is the record TTL, in seconds, at the time of the query.
+- `IN` is the Internet DNS class.
+- `A` is the record type.
+- `172.66.147.243` is the IPv4 address in that answer.
+
+The displayed TTL was `5` seconds for the records shown. DNS answers and TTLs can change, so treat these as observations from this run, not permanent values.
+
+The CNAME command produced no answer in the displayed output. That alone does not prove a DNS failure; the queried name may not have a CNAME record. If needed, inspect the full `dig` response and its status separately.
+
+## 2. HTTPS Request with `curl`
+
+### Command used
+
+```bash
+curl -v --connect-timeout 5 https://example.com/ -o /dev/null
+```
+
+- `-v` displays verbose connection and protocol information.
+- `--connect-timeout 5` sets a five-second connection timeout.
+- `-o /dev/null` discards the response body instead of saving it.
+
+### Relevant observed lines
+
+```text
+Host example.com:443 was resolved.
+Trying 104.20.23.154:443...
+Connected to example.com (104.20.23.154) port 443
+TLSv1.3
+SSL certificate verify ok.
+using HTTP/2
+< HTTP/2 200
+```
+
+Interpretation:
+
+1. `curl` obtained address information for `example.com`.
+2. It attempted to connect to `104.20.23.154` on port `443`.
+3. The connection succeeded.
+4. TLS version 1.3 was negotiated.
+5. Certificate verification succeeded according to `curl`, including a hostname match for `example.com`.
+6. The request used HTTP/2 and received a successful HTTP response with status `200`.
+
+This does not prove the website is free of vulnerabilities. It documents the connection and response observed in this test.
+
+### Response headers
+
+A second command was used to display response headers without printing the body:
+
+```bash
+curl -sS -D - -o /dev/null https://example.com/
+```
+
+Some observed headers were:
+
+```text
+HTTP/2 200
+content-type: text/html; charset=utf-8
+server: cloudflare
+last-modified: Tue, 13 Oct 2026 22:05:48 GMT
+allow: GET, HEAD
+accept-ranges: bytes
+cf-cache-status: HIT
+alt-svc: h3=":443"; ma=86400
+```
+
+Headers can vary between requests. `content-type: text/html; charset=utf-8` declares HTML content encoded as UTF-8. The `200` status indicates a successful HTTP response; neither the status nor the headers establish that the application is secure.
+
+## 3. Wireshark Capture: DNS Query and Response
+
+### Capture setup
+
+- Capture interface: `ens33`
+- Display filter used: `dns`
+- Test hostname: `example.com`
+
+The `dns` filter showed four rows:
+
+1. One A query.
+2. One A response.
+3. One AAAA query.
+4. One AAAA response.
+
+This is two DNS question-and-answer pairs. It does not mean the website was contacted twice; DNS lookup and HTTP communication are separate activities.
+
+### Wireshark panes
+
+1. **Packet List:** The top pane. Start by checking Time, Source, Destination, Protocol, Length, and Info.
+2. **Packet Details:** The middle pane. Select a row and expand protocol sections to inspect decoded fields.
+3. **Packet Bytes:** The bottom pane. Shows raw bytes in hexadecimal and a text representation where possible. It is not necessary to interpret this pane during the first DNS exercise.
+
+### Inspect a DNS query
+
+Apply this display filter:
+
+```text
+dns
+```
+
+Select the A query and expand **Domain Name System (query)**. Inspect:
+
+- **Queries → Name:** the queried hostname.
+- **Queries → Type:** the requested record type, such as `A` or `AAAA`.
+- **Transaction ID:** useful for correlating a query with its response.
+- **Flags:** query-related information and options.
+
+Then select the AAAA query and confirm its requested record type.
+
+### Inspect a DNS response
+
+Select the response matching the query and expand **Domain Name System (response)**. Inspect:
+
+- **Transaction ID:** compare it with the query.
+- **Response Code:** whether the resolver reported a DNS error.
+- **Answers:** returned records, if present.
+- **Record Type and address/name value:** what the response returned.
+- **Time to live (TTL):** the TTL attached to each answer.
+- **Answer count:** how many answer records are included.
+
+Useful response-code interpretation:
+
+- `NOERROR`: no DNS error was reported; an answer is not guaranteed to exist.
+- `NXDOMAIN`: the queried name does not exist according to that DNS response.
+
+**Evidence still to fill in:** the exact Name, Type, Response Code, answer values, and TTLs from the selected Wireshark packets have not yet been recorded in this note. Read these fields from the capture rather than assuming the Wireshark values match a separate `dig` query.
+
+## 4. Wireshark Fields for Other Protocols
+
+### Packet list fields
+
+| Field | What it tells you |
+|---|---|
+| Time | When the packet was captured; useful for ordering events |
+| Source | Source address shown for the packet |
+| Destination | Destination address shown for the packet |
+| Protocol | Protocol Wireshark recognizes |
+| Length | Packet length in bytes |
+| Info | Brief protocol-specific summary |
+
+One packet is only one piece of evidence. A field that looks unusual is not automatically proof of malicious activity.
+
+### IP fields
+
+Filters:
+
+```text
+ip.version == 4
+ipv6
+```
+
+Inspect Source Address, Destination Address, TTL (IPv4) or Hop Limit (IPv6), and Protocol/Next Header. These fields help identify endpoints and the next protocol carried by the packet.
+
+### TCP fields
+
+Filter:
+
+```text
+tcp
+```
+
+Inspect:
+
+- Source Port and Destination Port.
+- Flags, particularly SYN, ACK, FIN, and RST.
+- Sequence Number and Acknowledgment Number.
+- Window Size.
+- Retransmission indicators, if Wireshark reports them.
+
+A typical TCP handshake is `SYN` → `SYN, ACK` → `ACK`. A missing packet in a capture does not necessarily mean a handshake failed; the capture may have started late or missed traffic.
+
+Useful filters:
+
+```text
+tcp.flags.syn == 1 && tcp.flags.ack == 0
+tcp.flags.reset == 1
+tcp.analysis.retransmission
+tcp.port == 443
+```
+
+The first filter displays initial SYN packets without ACK. The second displays TCP reset packets. The third displays packets Wireshark identifies as retransmissions. The last displays TCP packets with port 443 as either source or destination.
+
+### UDP fields
+
+Filter:
+
+```text
+udp
+```
+
+Inspect Source Port, Destination Port, Length, and Checksum. Traditional DNS commonly uses UDP port 53, though DNS can also use TCP and other transport mechanisms.
+
+For DNS-over-UDP packets:
+
+```text
+dns && udp
+```
+
+### TLS fields
+
+Filter:
+
+```text
+tls
+```
+
+When visible, inspect Client Hello, Server Hello, handshake message type, supported versions, Server Name Indication (SNI), and TLS alerts.
+
+TLS 1.3 encrypts most handshake messages after Server Hello. A normal capture may not expose the certificate or all handshake details. HTTPS application data is encrypted, so the HTTP request and response contents generally cannot be read from the capture without suitable decryption material.
+
+### HTTP fields
+
+Filter:
+
+```text
+http
+```
+
+This works when Wireshark can recognize visible HTTP traffic. Ordinary HTTPS traffic is encrypted, so this filter may not show the HTTP messages from an HTTPS request.
+
+For visible HTTP, inspect Request Method, Host, Request URI, Status Code, Content-Type, User-Agent, Location (if a redirect is returned), and Content-Length (when present). HTTP/2 uses pseudo-headers such as `:method`, `:path`, and `:authority`; these are normally encrypted when HTTP/2 is carried over HTTPS.
+
+## 5. Useful Display Filters Reference
+
+Display filters affect which packets are shown, not whether the packets remain in the capture.
+
+| Purpose | Filter |
+|---|---|
+| DNS | `dns` |
+| IPv4 | `ip.version == 4` |
+| IPv6 | `ipv6` |
+| TCP | `tcp` |
+| UDP | `udp` |
+| TLS | `tls` |
+| Visible HTTP | `http` |
+| DNS over UDP | `dns && udp` |
+| Traffic to or from one IPv4 address | `ip.addr == 192.0.2.10` |
+| TCP traffic using port 443 | `tcp.port == 443` |
+| Initial TCP SYN packets | `tcp.flags.syn == 1 && tcp.flags.ack == 0` |
+| TCP reset packets | `tcp.flags.reset == 1` |
+| TCP retransmissions recognized by Wireshark | `tcp.analysis.retransmission` |
+
+`192.0.2.10` is a documentation example; replace it with an address from your own capture if needed.
+
+## 6. Repeatable Packet Investigation Workflow
+
+For a small capture, use this order:
+
+1. Identify the interface and the action that generated the traffic.
+2. Look at Time, Source, Destination, Protocol, Length, and Info in the Packet List.
+3. Select a relevant packet and expand the matching protocol in Packet Details.
+4. For DNS, compare a query with its response and record the requested name/type, response code, answer and TTL.
+5. For TCP, check ports, flags, and whether the handshake is visible.
+6. For TLS, note which handshake metadata is visible and remember that much of TLS 1.3 is encrypted.
+7. For HTTP, inspect methods, paths, headers, and status codes only when the content is visible.
+8. Write down what you actually observed separately from your interpretation.
+9. Record missing information and capture limitations instead of guessing.
+
+## 7. Experiment Record — Current Findings
+
+**Environment:** Ubuntu environment
+
+**Capture interface:** `ens33`
+
+**Target:** `example.com`
+
+### Confirmed from terminal output
+
+- The `dig` version was `9.18.39-0ubuntu0.24.04.8-Ubuntu`.
+- Two A answers and two AAAA answers were returned by the displayed DNS queries.
+- The displayed TTL for the records was 5 seconds at the time of those queries.
+- The CNAME lookup for `www.example.com` printed no answer in the displayed output.
+- `curl` connected to `104.20.23.154` on port 443.
+- TLS 1.3 was negotiated and certificate verification succeeded for `example.com`.
+- The HTTP response was `HTTP/2 200`.
+- A response header declared `content-type: text/html; charset=utf-8`.
+
+### Confirmed from Wireshark
+
+- Interface: `ens33`.
+- With display filter `dns`, four rows appeared: one A query and response, and one AAAA query and response.
+
+### To complete after inspecting Packet Details
+
+- A query: Name and Type.
+- A response: Transaction ID, Response Code, answer values and TTL.
+- AAAA query: Name and Type.
+- AAAA response: Transaction ID, Response Code, answer values and TTL.
+- If visible, record the TCP handshake packets and port 443 endpoints for the HTTPS request.
+- Record which TLS details were visible in the capture.
+
+## 8. Security Notes
+
+- DNS resolution and establishing a network connection are separate operations.
+- A hostname can resolve to multiple IPv4 and IPv6 addresses.
+- A DNS answer does not guarantee which address a client ultimately connects to.
+- A pre-connection DNS check alone does not eliminate DNS-rebinding or time-of-check-to-time-of-use (TOCTOU) risks if a client resolves the hostname again at connection time.
+- Each redirect is a new destination and should be checked independently by security-sensitive HTTP clients.
+- Secure destination enforcement must apply to the actual connection while preserving TLS SNI, certificate verification for the intended hostname, and the correct HTTP Host/authority value.
+- An HTTP 200 response, a valid TLS certificate, or a successful connection does not prove that the target website is free of vulnerabilities.
+- Use captures only on networks and systems where you have authorization. Captures can contain sensitive addresses and metadata; avoid publishing them unnecessarily.
