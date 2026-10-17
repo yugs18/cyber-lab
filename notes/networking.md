@@ -1426,3 +1426,240 @@ Network
 ```
 
 The goal is to understand what each layer is doing rather than treating networking as a collection of commands.
+
+---
+
+# DNS Fundamentals
+
+## 1. What Is DNS?
+
+**DNS (Domain Name System)** is a distributed naming system that allows applications to look up information associated with domain names.
+
+Humans use hostnames such as `example.com`, while network connections use IP addresses to identify destination hosts.
+
+DNS can provide information such as IPv4 addresses, IPv6 addresses, and aliases to other hostnames.
+
+### Simplified workflow
+
+1. An application needs to contact a hostname.
+2. The hostname is resolved through a DNS resolution process.
+3. DNS records provide information about the hostname.
+4. The application uses the relevant address information to establish a network connection.
+
+**Important:** DNS resolution and establishing a network connection are separate operations.
+
+## 2. DNS Record Types
+
+### A record
+
+Maps a hostname to an IPv4 address.
+
+Example:
+
+```text
+example.com → 192.0.2.10
+```
+
+The address above is an illustrative documentation address.
+
+### AAAA record
+
+Maps a hostname to an IPv6 address.
+
+Example:
+
+```text
+example.com → 2001:db8::10
+```
+
+The address above is an illustrative documentation address.
+
+**Security relevance:** An application that checks only IPv4 addresses may overlook prohibited IPv6 destinations.
+
+### CNAME record
+
+Creates an alias from one hostname to another hostname.
+
+Example:
+
+```text
+www.example.com → example.com
+```
+
+A CNAME points to another name, not directly to an IP address. The target hostname may need further resolution.
+
+## 3. DNS Resolvers
+
+A DNS resolver obtains DNS information for a client.
+
+A simplified process:
+
+1. The client requests DNS information.
+2. A resolver checks whether it has a usable cached answer.
+3. If necessary, the resolver obtains information from other DNS servers.
+4. The resolver returns the answer to the client.
+
+Real resolution can involve operating-system caches, recursive resolvers, authoritative servers, aliases, and multiple addresses.
+
+## 4. TTL and DNS Caching
+
+**TTL (Time To Live)** specifies how long a DNS record may generally be cached before it should be refreshed.
+
+For example:
+
+```text
+TTL = 300 seconds
+```
+
+This represents five minutes.
+
+TTL does not guarantee that every application will connect to the same IP address for that entire period. Applications and resolvers can have different caching behavior or resolution paths.
+
+## 5. Multiple DNS Answers
+
+One hostname can resolve to multiple IP addresses.
+
+Possible reasons include:
+
+- Load balancing.
+- Redundancy and failover.
+- Geographic distribution.
+- IPv4 and IPv6 support.
+
+A security-sensitive application must evaluate the relevant set of addresses against its destination policy instead of blindly trusting the first result.
+
+---
+
+# DNS and Web Security
+
+## 6. Hostname Validation vs. Destination Validation
+
+These are different checks.
+
+**Hostname validation** determines whether the supplied hostname or URL meets the application's input rules.
+
+**Destination validation** determines whether the network destination is permitted by the application's security policy.
+
+A syntactically valid hostname is not necessarily safe to contact.
+
+A DNS lookup that returns a public address also does not prove that a later connection will use that address.
+
+## 7. TOCTOU: Time of Check to Time of Use
+
+TOCTOU is a class of problem in which a condition changes between the time it is checked and the time it is used.
+
+Consider this simplified workflow:
+
+1. An application resolves a hostname.
+2. It checks that the resulting IP address is allowed.
+3. The application later makes a network connection.
+4. The HTTP client performs another DNS lookup.
+5. The new result differs from the previously checked address.
+
+If the actual connection is not constrained by the security check, the earlier validation may no longer protect the application.
+
+**Key lesson:** A security check must enforce the property that matters at the point where the protected operation occurs.
+
+## 8. DNS Rebinding
+
+DNS rebinding is a technique in which a hostname resolves to different IP addresses over time.
+
+In a vulnerable application, changing DNS answers can undermine assumptions made during hostname or destination validation.
+
+### Hypothetical example
+
+1. A hostname resolves to a public IP address.
+2. The application allows the hostname.
+3. A later lookup returns a prohibited address.
+4. The application connects to that address without enforcing its destination policy.
+
+Whether this is exploitable depends on the application's implementation and environment.
+
+### Related risks
+
+- Loopback addresses.
+- Private IPv4 and IPv6 addresses.
+- Link-local addresses.
+- Cloud metadata endpoints.
+- Redirects to prohibited destinations.
+- IPv4/IPv6 handling inconsistencies.
+- Multiple DNS answers containing both allowed and prohibited addresses.
+
+## 9. Redirects and Destination Safety
+
+An HTTP redirect instructs a client to request another URL.
+
+A destination that was allowed initially does not automatically make the redirected destination safe.
+
+A robust implementation must validate each redirect destination before connecting to it.
+
+WebCheck Report currently reports redirects without automatically following them. This reduces redirect-related risk, but does not by itself eliminate DNS-rebinding or connection-time destination risks.
+
+## 10. Secure Connection Design
+
+A robust destination-security design must enforce its policy on the address actually used by the network connection.
+
+It must also preserve normal HTTPS behavior:
+
+- **TLS SNI:** The intended hostname is used during TLS negotiation.
+- **Certificate verification:** The certificate is verified against the intended hostname.
+- **HTTP Host header:** The request uses the correct hostname.
+- **Redirect handling:** Each new destination is validated independently.
+
+Simply replacing a hostname with an IP address in a URL can break TLS verification or change application behavior.
+
+DNS validation alone is not a complete security boundary. Connection-time enforcement and, where appropriate, network egress restrictions may also be necessary.
+
+---
+
+# Practical Commands
+
+These commands will be used in Session 2 to investigate DNS and HTTP behavior.
+
+```bash
+dig example.com A
+dig example.com AAAA
+dig example.com CNAME
+curl -v --connect-timeout 5 https://example.com/
+```
+
+If `dig` is unavailable on Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install dnsutils
+```
+
+Remember that a separate `dig` lookup does not prove which address `curl` or a Python HTTP client ultimately uses. Different clients may use different resolution paths or cached results.
+
+With Wireshark, DNS and TCP traffic may be observable where the capture point permits it. HTTPS application data is encrypted, so an ordinary packet capture will not reveal the full HTTP response body.
+
+---
+
+# Key Takeaways
+
+1. DNS maps names to information such as IP addresses and aliases.
+2. A records represent IPv4 addresses; AAAA records represent IPv6 addresses.
+3. CNAME records point to other hostnames.
+4. TTL controls DNS record caching, not the lifetime of a network connection.
+5. A hostname can have multiple IP addresses.
+6. Hostname validation and destination validation are different.
+7. DNS answers can change between a security check and a connection.
+8. DNS rebinding can exploit unsafe assumptions about hostname resolution.
+9. Redirects must be treated as new destinations.
+10. A robust security policy must constrain the actual connection while preserving TLS verification.
+
+## Review Questions
+
+1. What is the difference between an A record and an AAAA record?
+2. What does a CNAME point to?
+3. What does DNS TTL control?
+4. Why might a hostname resolve to multiple addresses?
+5. Explain TOCTOU in the context of DNS resolution.
+6. What is DNS rebinding?
+7. Why is checking a DNS answer once insufficient to guarantee destination safety?
+8. Why must HTTPS certificate verification remain enabled when connecting to a validated IP?
+9. Why must redirect destinations be validated independently?
+10. What must a secure HTTP client enforce at connection time?
+
+---
