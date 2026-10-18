@@ -2014,3 +2014,247 @@ For a small capture, use this order:
 - Secure destination enforcement must apply to the actual connection while preserving TLS SNI, certificate verification for the intended hostname, and the correct HTTP Host/authority value.
 - An HTTP 200 response, a valid TLS certificate, or a successful connection does not prove that the target website is free of vulnerabilities.
 - Use captures only on networks and systems where you have authorization. Captures can contain sensitive addresses and metadata; avoid publishing them unnecessarily.
+
+---
+
+# SSRF, DNS Rebinding & Safe URL Fetching
+
+## 1. Server-Side Request Forgery (SSRF)
+
+**SSRF (Server-Side Request Forgery)** is a vulnerability in which a user can influence an application or server to make a request to an unintended destination.
+
+A common example is a website-preview feature:
+
+1. A user submits a URL.
+2. The application server fetches that URL.
+3. The server returns information about the page.
+
+This is a normal feature when appropriately restricted. It becomes an SSRF risk if an attacker can make the server contact destinations the feature should not reach.
+
+### Why SSRF can be dangerous
+
+The request is made by the application server, not directly by the user's browser. The server may have network access to internal services or resources unavailable to an ordinary Internet user.
+
+Examples of destinations a security-sensitive URL fetcher may need to prohibit include:
+
+- The server itself through a loopback address.
+- Private-network services.
+- Link-local addresses and cloud metadata services.
+- Other special-purpose or otherwise prohibited IPv4/IPv6 destinations.
+
+A request to an internal address is not automatically a vulnerability. The risk depends on the application's access, its behavior, and the security policy it is supposed to enforce.
+
+## 2. Understanding Internal Destinations
+
+### Loopback
+
+IPv4 loopback includes `127.0.0.1`. It refers to the same machine that makes the request.
+
+If a URL-fetching application running on a remote server requests `127.0.0.1`, that address refers to the application server itself—not the user's laptop.
+
+### Private IPv4 addresses
+
+Common private IPv4 ranges include:
+
+```text
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+```
+
+These addresses are commonly used inside private networks.
+
+### Link-local addresses
+
+`169.254.0.0/16` is the IPv4 link-local range. Cloud environments may expose metadata services at link-local addresses; a vulnerable server-side URL fetcher might be able to reach such services.
+
+### IPv6 and special-purpose addresses
+
+A URL-fetching security policy must consider IPv6 as well as IPv4. Checking only private IPv4 ranges is insufficient. The policy should account for loopback, link-local, private/local, multicast, unspecified, and other special-purpose addresses as appropriate to the application.
+
+**Important:** An address classification policy should be based on a reliable IP-address library and a clearly defined security policy, rather than ad-hoc string comparisons.
+
+## 3. URL Validation vs. Destination Validation
+
+These are separate checks.
+
+- **URL validation:** Determines whether the input is a syntactically valid URL and follows the application's accepted URL rules.
+- **Destination validation:** Determines whether the IP destination is allowed by the application's policy.
+- **Connection-time enforcement:** Ensures the actual network connection uses a destination permitted by that policy.
+
+A URL being syntactically valid does not mean it is safe to fetch. A hostname resolving to a public IP during one lookup does not guarantee a later connection will use that same address.
+
+### Limit accepted schemes
+
+For a tool intended to check web URLs, accept only the schemes it needs:
+
+```text
+http://
+https://
+```
+
+Reject unsupported schemes such as `file://` and any other scheme not deliberately supported. Do not enable extra client capabilities that the application does not require.
+
+HTTP is unencrypted in transit; HTTPS uses TLS. Supporting HTTP does not remove the need for destination validation.
+
+## 4. DNS Rebinding
+
+**DNS rebinding** is a technique in which a hostname is made to resolve to different IP addresses over time. In some applications, this can undermine assumptions made during URL or destination validation.
+
+A simplified hypothetical sequence:
+
+1. An application resolves a hostname.
+2. The first DNS answer contains a permitted public address.
+3. The application approves that answer.
+4. Later, the HTTP client resolves the same hostname again.
+5. The later answer differs and contains a prohibited address.
+6. If the HTTP client connects without re-enforcing the destination policy, the earlier check may not protect the connection.
+
+This is related to **TOCTOU (Time Of Check to Time Of Use)**: a relevant condition changes between the time it is checked and the time it is used.
+
+DNS rebinding is not automatically an exploitable SSRF vulnerability. Exploitability depends on the client's implementation, the timing and resolution behavior, and the server's network access.
+
+## 5. Multiple DNS Answers
+
+One hostname can resolve to multiple IPv4 or IPv6 addresses. This may be used for redundancy, load balancing, or other legitimate reasons.
+
+A security-sensitive URL fetcher should:
+
+1. Resolve the hostname to the relevant IPv4 and IPv6 addresses.
+2. Classify every returned address against its destination policy.
+3. Apply a clearly defined rule to mixed responses.
+4. Ensure the actual connection uses only an address that passed the policy.
+
+A conservative policy is to reject the hostname when any returned address is prohibited, rather than let the HTTP client choose an unchecked address from a mixed result. A different design must still ensure no connection can be made to a prohibited address.
+
+Checking only the first address, or checking only IPv4, can leave gaps.
+
+## 6. The Actual Connection Must Enforce the Policy
+
+A DNS lookup and an HTTP connection are separate operations. A common risk is:
+
+1. The application resolves a hostname and checks the result.
+2. The HTTP client performs a separate lookup during connection establishment.
+3. The client connects to a different result from the address that was checked.
+
+The central defensive principle is:
+
+> Do not merely check an address before connecting. Ensure the actual connection uses a validated, permitted address.
+
+The networking implementation must avoid unchecked re-resolution changing the destination between validation and connection. Connection retries and address-selection/fallback behavior must also remain within the same policy.
+
+A pre-connection DNS check alone is not a complete security boundary.
+
+## 7. Preserve HTTPS Hostname Verification
+
+Destination IP and website identity are different concepts. If a client connects to a validated IP for `example.com`, it must still preserve the intended hostname for HTTPS.
+
+| Item | Purpose |
+|---|---|
+| Validated IP address | Determines the network destination |
+| TLS SNI hostname | Indicates the intended hostname during the TLS handshake, when SNI is used |
+| Certificate verification hostname | The hostname against which the TLS certificate is verified |
+| HTTP `Host` header / HTTP/2 `:authority` | Identifies the intended hostname at the HTTP layer |
+
+For a request to `https://example.com/`, the intended hostname remains `example.com` even if the connection is directed to a validated IP address.
+
+Do **not** solve destination validation by disabling TLS certificate verification. That would remove an important protection and could expose the client to interception or impersonation.
+
+## 8. Redirects Are New Destinations
+
+An HTTP redirect can instruct a client to request a different URL, commonly through the `Location` response header.
+
+For example, a response might contain:
+
+```text
+HTTP/1.1 302 Found
+Location: https://another-site.example/
+```
+
+If an HTTP client follows redirects automatically, it may make a second request to the new destination. A destination that passed the first check does not make the redirected destination safe.
+
+A security-sensitive implementation should validate each new destination before connecting. It should also ensure redirect handling cannot bypass scheme rules, DNS checks, or connection-time enforcement.
+
+WebCheck Report currently reports redirects without automatically following them. That avoids making the redirected request automatically, but it does not by itself eliminate DNS-rebinding or other destination risks in the initial request.
+
+## 9. Allowlisting vs. Blocklisting
+
+### Allowlist
+
+An allowlist permits only specifically approved destinations, for example a small set of known API hostnames. It is well suited to applications that only need to contact a fixed set of services.
+
+### Blocklist
+
+A blocklist rejects known prohibited destinations while allowing other destinations. It may fit a general-purpose public URL checker better than a tiny hostname allowlist, but it can be incomplete if it misses an address category or edge case.
+
+For a tool designed to check many public websites, destination block rules still need robust IP classification and connection-time enforcement. Neither an allowlist nor a blocklist should be treated as a substitute for ensuring that the actual connection obeys the policy.
+
+## 10. Fail Closed
+
+**Fail closed** means refusing the protected operation when a required security check cannot be completed.
+
+For example, if the application cannot resolve or classify a destination well enough to determine that it is permitted, it should not make the request anyway.
+
+Failing closed does not mean assuming every network error is malicious. It means not proceeding when a required security condition remains unverified.
+
+## 11. Defense in Depth
+
+Defense in depth uses multiple protective controls because each addresses a different failure mode.
+
+For a server-side URL checker, layers may include:
+
+1. Validate the URL syntax and allow only intended schemes.
+2. Resolve and classify all relevant IPv4/IPv6 addresses.
+3. Apply a clear policy to prohibited and mixed DNS answers.
+4. Enforce the policy on the actual connection and all retry/fallback paths.
+5. Do not automatically follow redirects unless every new destination is validated.
+6. Preserve TLS SNI and certificate verification for the intended hostname, plus the correct HTTP Host/authority value.
+7. Where appropriate, use network egress controls to restrict what the application server can reach.
+8. Test expected and adversarial cases; document what the tests do and do not demonstrate.
+
+Passing a unit-test suite is useful evidence, but it does not by itself prove production security.
+
+## 12. Applying This to WebCheck Report
+
+### Behaviors already established from earlier project work
+
+- The tool accepts URLs for HTTP/HTTPS diagnostics.
+- It validates URL inputs.
+- It resolves hostnames and rejects non-public IP addresses according to its existing network-safety check.
+- It reports redirects without automatically following them.
+- Automated tests were previously reported as passing, but passing tests alone do not establish complete SSRF resistance.
+
+### Important concern still requiring verification
+
+The existing design was identified as potentially vulnerable to a time-of-check-to-time-of-use gap: the application checks DNS answers, but the HTTP client may resolve the hostname again when connecting. This concern has not been confirmed through an exploit test in this note, and no complete fix is claimed here.
+
+Before describing the tool as hardened, inspect and test whether the actual connection is guaranteed to use only a validated address while preserving hostname-based TLS verification and HTTP Host/authority behavior. Also test IPv4/IPv6 handling, mixed DNS answers, redirects, and relevant retry/fallback behavior.
+
+### Safe development approach
+
+- Use mock resolvers and controlled local test fixtures to test policy decisions.
+- Add tests for public addresses, prohibited address classes, mixed answers, DNS errors, and redirect behavior.
+- Verify which address the connection actually uses, rather than inferring it only from an earlier DNS lookup.
+- Keep TLS certificate verification enabled.
+- Document implementation limitations and avoid production-security claims until the relevant behavior is verified.
+
+Only test against systems and networks you own or have explicit permission to assess.
+
+## 13. Review Questions
+
+1. What is SSRF, and why does the request's server-side origin matter?
+2. If a server-side application requests `127.0.0.1`, which machine does that address refer to?
+3. How are URL validation, destination validation, and connection-time enforcement different?
+4. What is DNS rebinding?
+5. What does TOCTOU mean in the context of DNS resolution?
+6. Why must a URL checker consider both IPv4 and IPv6?
+7. Why can multiple DNS answers create a destination-validation challenge?
+8. Why must every redirect destination be checked separately?
+9. What are the differences between allowlisting and blocklisting?
+10. What does fail closed mean?
+11. Why should TLS certificate verification remain enabled when connecting to a validated IP?
+12. What still needs to be verified in WebCheck Report before claiming that its destination handling is hardened?
+
+## Key Takeaway
+
+SSRF prevention is not just about rejecting suspicious URL strings. A secure URL-fetching service must control where the server is actually allowed to connect, account for DNS answers and changes, validate each redirect destination, preserve HTTPS hostname verification, and fail safely when required security checks cannot be completed.
