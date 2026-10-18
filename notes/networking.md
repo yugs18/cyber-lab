@@ -2258,3 +2258,58 @@ Only test against systems and networks you own or have explicit permission to as
 ## Key Takeaway
 
 SSRF prevention is not just about rejecting suspicious URL strings. A secure URL-fetching service must control where the server is actually allowed to connect, account for DNS answers and changes, validate each redirect destination, preserve HTTPS hostname verification, and fail safely when required security checks cannot be completed.
+
+---
+
+# SSRF and Localhost
+
+## Server-Side Request Forgery (SSRF)
+
+**Definition:** SSRF is a vulnerability in which user-influenced input causes a server-side application to make a request to an unintended destination. The destination may be an internal service, the application itself, or an external system.
+
+### Client-side vs server-side perspective
+
+- When my browser requests `http://localhost/...`, `localhost` normally refers to the machine running my browser.
+- When a vulnerable application on a remote server requests `http://localhost/...` on my behalf, `localhost` refers to the machine or network namespace making that server-side connection.
+- Therefore, in an SSRF test, `localhost` can reach a service local to the vulnerable server even though it does not point to my own computer.
+
+### Lab example: `stockApi`
+
+In PortSwigger's **Basic SSRF against the local server** lab, the product stock-check request was `POST /product/stock`. Its `stockApi` parameter controlled the URL that the application fetched.
+
+Observed experiments:
+
+| Input | Observation | Interpretation |
+|---|---|---|
+| `https://host/admin` | `401` | Unauthorized response for that attempt; not enough on its own to identify the exact cause. |
+| `https://local/admin` | `500` | Server error; the status alone did not explain what failed. |
+| `http://localhost/admin` | `200` plus admin HTML | The response body showed that the local admin interface had been reached through the stock-check feature. |
+| `http://localhost/admin/delete?username=carlos` | `302`, followed by the lab's solved message | The lab confirmed that the delete action succeeded. A redirect status alone is not proof of success. |
+
+The important clue was the combination of a user-controlled URL parameter and a response containing the internal admin page. The server performed the request; the browser was only sending the stock-check request to the vulnerable application.
+
+### Common SSRF risk areas
+
+- URL importers, image fetchers, webhooks, document previewers, stock checks, and other features that fetch user-supplied URLs.
+- Internal-only admin pages or services that trust requests from local interfaces.
+- Redirects that lead to a different destination after the initial URL is validated.
+- DNS names that resolve to multiple addresses or change between validation and connection.
+
+### Defense concepts to remember
+
+1. Restrict URL schemes, hosts, and ports to what the feature actually requires; prefer a strict allowlist when feasible.
+2. Resolve and validate all relevant IPv4 and IPv6 destinations, and prohibit loopback, private, link-local, multicast, unspecified, and other disallowed address ranges.
+3. Enforce the destination policy at connection time, not only during an earlier DNS lookup; preserve TLS certificate verification and hostname/SNI behavior.
+4. Disable redirects where they are not needed or revalidate every redirect destination.
+5. Use outbound network controls to prevent the application from reaching sensitive internal networks and services.
+6. Require authentication and authorization for administrative actions even when requests originate locally.
+
+### Connection to DNS and TOCTOU
+
+A DNS name can resolve to one IP during validation and a different IP when the HTTP client connects. This is a time-of-check/time-of-use (TOCTOU) risk and can contribute to DNS-rebinding-style SSRF. A robust defense must ensure that the actual peer address is permitted, not merely that an earlier DNS result looked safe. Mixed A/AAAA answers and redirects also need consistent policy enforcement.
+
+### Testing habit
+
+Change one input at a time and compare both the response status and response body. A `200`, `302`, `401`, or `500` is evidence, but none should be interpreted in isolation. Confirm the application behavior and, in a training lab, the platform's success indicator.
+
+---
