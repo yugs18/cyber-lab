@@ -487,6 +487,400 @@ and hidden interface elements are not proof of permission.
 
 ---
 
+# Access Control
+
+## 1. What Is Access Control?
+
+**Access control** is the process of determining which users or systems may access particular resources and perform particular actions.
+
+A web application may contain user profiles, orders, invoices, administrative panels, and account-management functions. Not every user should have permission to access or modify all of them.
+
+For example:
+- Alice should be able to view her own profile.
+- Alice should not automatically be able to view Bob's private information.
+- An ordinary user should not be able to delete other users.
+- An administrator may have additional permissions, according to the application's rules.
+
+The central security principle is:
+
+> Every sensitive resource and action must be protected by appropriate authorization checks.
+
+## 2. Authentication vs. Authorization
+
+These concepts are related but different.
+
+### Authentication — Who are you?
+
+Authentication verifies the identity associated with a request.
+
+Common mechanisms include:
+- Passwords
+- Multi-factor authentication (MFA)
+- Session cookies
+- Access tokens
+- Client certificates
+
+Successful authentication establishes an identity, but it does not automatically grant access to every resource.
+
+### Authorization — What are you allowed to do?
+
+Authorization determines whether an identity is allowed to access a particular resource or perform a particular action.
+
+For example, an application may authenticate Alice successfully but deny her access to Bob's private invoice.
+
+### Request flow
+
+A simplified security flow is:
+
+```text
+Incoming request
+      |
+      v
+Authenticate the identity
+      |
+      v
+Determine the requested resource/action
+      |
+      v
+Check authorization
+      |
+      +---- Denied ----> Reject request
+      |
+      v
+Perform the permitted operation
+      |
+      v
+Return response
+```
+
+**Remember:** Authentication establishes identity; authorization enforces permissions.
+
+---
+
+## 3. Horizontal Privilege Escalation
+
+**Horizontal privilege escalation** occurs when a user gains access to another user's resources or functionality at approximately the same privilege level.
+
+Example:
+
+Alice and Bob are ordinary users of a web application.
+
+- Alice can view her own invoices.
+- Bob can view his own invoices.
+- Alice should not be able to view Bob's invoices.
+- A security flaw allows Alice to access Bob's invoice.
+
+Alice has crossed a boundary between users, but she has not necessarily gained administrator privileges.
+
+### Security impact
+
+Depending on the application, horizontal escalation may expose:
+- Personal information
+- Private messages
+- Orders and invoices
+- Documents
+- Account-specific records
+
+It may also allow modification or deletion of another user's data if the affected operations permit it.
+
+### Key question
+
+**Can this user access another user's resources without permission?**
+
+---
+
+## 4. Vertical Privilege Escalation
+
+**Vertical privilege escalation** occurs when a user gains access to capabilities or permissions intended for a higher privilege level.
+
+Example:
+
+- An ordinary user can view their own profile.
+- An administrator can delete user accounts.
+- A flaw allows the ordinary user to invoke the account-deletion operation.
+
+The ordinary user has crossed a privilege-level boundary.
+
+### Security impact
+
+Possible consequences include:
+- Unauthorized account deletion
+- Changes to user roles or permissions
+- Modification of administrative settings
+- Access to privileged functionality
+- Disruption of application operations
+
+The actual impact depends on which permissions are exposed and what the application allows those permissions to do.
+
+### Key question
+
+**Can this user perform an action that requires greater privileges?**
+
+---
+
+## 5. Object-Level Authorization
+
+An **object** is a particular resource or record managed by an application.
+
+Examples include:
+- A user profile
+- An invoice
+- An order
+- A document
+- A support ticket
+- A database record
+
+Object-level authorization determines whether the current user is permitted to access or modify the particular object requested.
+
+For example, an application might receive:
+
+```http
+GET /invoices/1002
+```
+
+The server must not assume that the user can access invoice `1002` simply because the request contains its identifier.
+
+It must establish whether the authenticated user has permission to access that invoice.
+
+### Important distinction
+
+Knowing an object's identifier is not the same as being authorized to access the object.
+
+Identifiers may be:
+- Sequential integers
+- Random identifiers
+- UUIDs
+- Usernames
+- Slugs
+- Other application-specific references
+
+Changing an identifier is not inherently a vulnerability. The vulnerability exists when the application grants access without the required authorization.
+
+### Key question
+
+**Is this user allowed to access this specific object?**
+
+---
+
+## 6. Function-Level Authorization
+
+A **function** is an operation or capability that an application provides.
+
+Examples include:
+- Deleting a user
+- Changing account roles
+- Issuing a refund
+- Exporting sensitive information
+- Modifying application configuration
+- Viewing administrative reports
+
+Function-level authorization determines whether the current user is allowed to execute the requested operation.
+
+For example, hiding an administrator-only button from ordinary users does not protect the operation itself. A user may still attempt to send the corresponding HTTP request directly.
+
+The server must enforce the permission check when processing the request.
+
+### Key question
+
+**Is this user allowed to perform this particular action?**
+
+---
+
+## 7. IDOR — Insecure Direct Object Reference
+
+**IDOR** is a common access-control vulnerability in which an application uses a user-controlled reference to locate an object but fails to enforce the necessary access check.
+
+Consider the following request:
+
+```http
+GET /account?user_id=1001
+```
+
+The application uses `user_id` to identify the requested account.
+
+If the current user can change the reference and retrieve another user's private account information without permission, the application may be vulnerable to IDOR.
+
+### How IDOR occurs
+
+A simplified sequence is:
+
+```text
+User sends request
+       |
+       v
+Application reads object reference
+       |
+       v
+Application retrieves object
+       |
+       v
+Required authorization check is missing
+       |
+       v
+Unauthorized object access
+```
+
+### Common object references
+
+An IDOR may involve:
+- Query parameters
+- URL path parameters
+- Hidden form fields
+- JSON request-body fields
+- File or document identifiers
+- References included in API requests
+
+The parameter's location or naming is not the decisive factor. The important question is whether the application enforces the required permission check.
+
+### IDOR and horizontal escalation
+
+IDOR commonly results in horizontal privilege escalation when a user accesses another user's record at the same privilege level.
+
+However, IDOR and horizontal escalation are not synonyms:
+
+- **IDOR** describes a vulnerability pattern involving object references and missing authorization.
+- **Horizontal privilege escalation** describes the resulting access across users at a similar privilege level.
+
+An IDOR can sometimes contribute to more serious privilege escalation, depending on which objects or operations become accessible.
+
+### Key question
+
+**Does the application verify that the authenticated user is allowed to access the object identified by the request?**
+
+---
+
+## 8. How the Concepts Relate
+
+| Concept | What it describes | Main security question |
+|---|---|---|
+| Horizontal privilege escalation | Access across users at a similar privilege level | Can this user access another user's resources? |
+| Vertical privilege escalation | Access to higher-privilege capabilities | Can this user perform a privileged operation? |
+| Object-level authorization | Permission for a specific resource | Is this user allowed to access this record? |
+| Function-level authorization | Permission for a specific operation | Is this user allowed to perform this action? |
+| IDOR | A common object-reference access-control flaw | Is a user-controlled reference accepted without the necessary access check? |
+
+These concepts overlap rather than compete with one another.
+
+For example, an IDOR involving another user's invoice may represent:
+- An object-level authorization failure
+- An IDOR vulnerability
+- Horizontal privilege escalation
+
+The terms describe different aspects of the same underlying security problem.
+
+---
+
+## 9. Why Hiding URLs Is Not Security
+
+An application might hide an administrator link or avoid displaying certain functionality to ordinary users.
+
+That does not establish an access-control boundary.
+
+A user can sometimes discover a route through:
+- Public files such as `robots.txt`
+- Links elsewhere in the application
+- Browser developer tools
+- JavaScript files
+- Previously observed requests
+- Direct requests to known paths
+
+Discovering a route is not automatically a vulnerability. The real issue is whether the server permits an unauthorized user to access the resource or perform the action.
+
+**Security must depend on enforced permissions, not on keeping URLs secret.**
+
+---
+
+## 10. Core Principles for Preventing Access-Control Vulnerabilities
+
+### 10.1 Enforce authorization on the server
+
+Do not rely on a hidden button, a disabled interface element, or a client-controlled field to enforce permissions.
+
+### 10.2 Check every sensitive object
+
+When retrieving or modifying a record, verify that the authenticated user has the necessary permission for that particular resource.
+
+### 10.3 Check every sensitive action
+
+Administrative and other privileged operations must enforce appropriate permissions on the server-side endpoint that performs the action.
+
+### 10.4 Deny access by default
+
+When the application cannot establish the required permission, it should not perform the protected operation.
+
+### 10.5 Do not confuse identifiers with permissions
+
+A sequential ID, random identifier, or UUID identifies a resource; it does not grant permission to access it.
+
+Unpredictable identifiers may make discovery more difficult, but they do not replace authorization checks.
+
+### 10.6 Test different identities and privilege levels
+
+Access-control rules should be considered across:
+- Unauthenticated users
+- Ordinary authenticated users
+- Different users at the same privilege level
+- Users with elevated permissions
+- Administrators
+
+The application must enforce the intended rules consistently.
+
+---
+
+## 11. Evidence and Vulnerability Reasoning
+
+A suspicious response does not automatically prove an access-control vulnerability.
+
+For example:
+- A `200 OK` response does not necessarily mean unauthorized data was exposed.
+- A `403 Forbidden` response suggests the server refused the request, but the full context still matters.
+- A visible URL does not prove that its functionality is unprotected.
+- A predictable object identifier does not prove that IDOR exists.
+
+A sound security conclusion should distinguish:
+
+1. **Observation:** What did the application actually return or permit?
+2. **Authorization rule:** What should the user have been allowed to access or do?
+3. **Failure:** Which required permission check was missing or ineffective?
+4. **Impact:** What information or operation became accessible?
+5. **Remediation:** Which server-side check would prevent the unauthorized access?
+
+The goal is to explain the security failure, not simply label a request as suspicious.
+
+---
+
+## 12. Final Mental Model
+
+Use this model when examining an application's access-control design:
+
+```text
+Request
+   |
+   v
+Who is making the request?
+   |
+   v
+What resource is being requested?
+   |
+   v
+What operation is being attempted?
+   |
+   v
+Does the identity have permission
+for this resource and operation?
+   |
+   +---- No ----> Reject the operation
+   |
+   v
+Perform the authorized operation
+```
+
+The central principle is:
+
+**A user being authenticated does not mean the user is authorized to access every object or execute every function. The server must enforce permissions for the particular resource and action.**
+
+---
+
 ## Authentication and Session Investigation
 
 - Lab: Username Enumeration via Different Responses
