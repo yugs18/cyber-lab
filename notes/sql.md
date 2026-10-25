@@ -1,506 +1,254 @@
-# SQL Fundamentals — Cybersecurity Notes
+# SQL Fundamentals and SQL Injection
+
+These notes cover the underlying concepts of SQL and SQL injection. **Individual PortSwigger lab reports are stored separately**; this file records theory, mental models, and learning-path progress rather than reproducing lab procedures.
 
 ## 1. What Is SQL?
 
-**SQL (Structured Query Language)** is a language used to interact with relational databases.
+SQL (Structured Query Language) is used to interact with relational databases. Applications commonly use SQL to retrieve, insert, update, and delete data.
 
-Applications use SQL to retrieve, insert, update, and delete information stored in a database.
+Security relevance: applications frequently pass user-controlled values to database queries. If the application combines input with SQL incorrectly, that input may change the query's intended structure or logic.
 
-Examples of application data include:
+Common SQL commands:
 
-- User accounts and profiles
-- Products and prices
-- Orders and invoices
-- Authentication-related records
-- Application settings
+- `SELECT` — retrieve records.
+- `FROM` — specify the table to query.
+- `WHERE` — filter records.
+- `INSERT` — add records.
+- `UPDATE` — modify records.
+- `DELETE` — remove records.
 
-SQL is important in cybersecurity because web applications often process user input and use it when interacting with a database. Understanding how queries work helps explain SQL injection and insecure data access.
+## 2. Tables, Rows, and Columns
 
----
+Imagine a fictional `products` table:
 
-## 2. Understanding Relational Databases
-
-A relational database organizes related information into tables.
-
-Consider a table named `products`.
-
-| id | name | category | price |
+| id | name | category | released |
 |---:|---|---|---:|
-| 1 | Keyboard | electronics | 1500 |
-| 2 | Mouse | electronics | 600 |
-| 3 | Notebook | stationery | 100 |
-| 4 | SQL Basics | books | 450 |
+| 1 | Mug | Gifts | 1 |
+| 2 | Notebook | Gifts | 1 |
+| 3 | Prototype | Gifts | 0 |
+| 4 | Keyboard | Electronics | 1 |
 
-### Table
+In this example, `1` means released and `0` means unreleased.
 
-A **table** is a collection of related records.
+- **Table:** a collection of related records.
+- **Row:** one record, such as the Prototype product.
+- **Column:** an attribute, such as `category`.
+- **Query:** an instruction sent to the database.
 
-In this example, `products` stores information about products.
-
-### Row
-
-A **row** represents one record in a table.
-
-For example:
-
-```text
-2 | Mouse | electronics | 600
-```
-
-This row represents one product.
-
-### Column
-
-A **column** represents an attribute of the records.
-
-The `products` table has these columns:
-
-- `id`
-- `name`
-- `category`
-- `price`
-
-Each column has a defined data type, such as integer, text, or numeric data.
-
-### Primary key
-
-A **primary key** uniquely identifies each row in a table.
-
-For example, `id` can serve as the primary key in the `products` table.
-
-An identifier helps locate a record, but knowing an identifier does not automatically grant permission to access that record.
-
----
-
-## 3. A Second Example: The Users Table
-
-Consider a fictional table named `users`.
-
-| id | username | role | active |
-|---:|---|---|---|
-| 1 | alice | user | TRUE |
-| 2 | bob | user | TRUE |
-| 3 | charlie | admin | TRUE |
-| 4 | diana | user | FALSE |
-
-Here:
-
-- `id` identifies a user.
-- `username` stores a username.
-- `role` represents the user's role.
-- `active` indicates whether the fictional account is active.
-
-These values are examples for learning SQL, not real credentials or accounts.
-
----
-
-## 4. The SELECT Statement
-
-`SELECT` specifies which columns should appear in the query result.
-
-### Example
+A query such as:
 
 ```sql
-SELECT name, price
-FROM products;
+SELECT * FROM products
+WHERE category = 'Gifts'
+AND released = 1;
 ```
 
-This query requests the product names and prices.
+retrieves products whose category is `Gifts` and whose `released` value is `1`.
 
-Result:
+The `AND` operator requires both conditions to be true.
 
-| name | price |
-|---|---:|
-| Keyboard | 1500 |
-| Mouse | 600 |
-| Notebook | 100 |
-| SQL Basics | 450 |
+## 3. Basic Filtering and Boolean Logic
 
-The database returns the selected columns for matching rows.
-
-### Selecting every column
-
-```sql
-SELECT *
-FROM products;
-```
-
-The `*` requests all columns from the specified table.
-
-Although useful for learning, selecting only the necessary columns is often clearer in application code.
-
----
-
-## 5. The FROM Clause
-
-`FROM` specifies the table from which records are retrieved.
-
-Example:
-
-```sql
-SELECT username
-FROM users;
-```
-
-Read this as:
-
-> Retrieve the username column from the users table.
-
-A basic SQL query can therefore be understood as:
-
-```text
-SELECT → Which columns?
-FROM   → Which table?
-```
-
----
-
-## 6. The WHERE Clause
-
-`WHERE` filters rows according to a condition.
-
-Example:
-
-```sql
-SELECT name, price
-FROM products
-WHERE category = 'books';
-```
-
-Result:
-
-| name | price |
-|---|---:|
-| SQL Basics | 450 |
-
-Only the row whose category matches `books` is returned.
-
-### Filtering by username
-
-```sql
-SELECT username, role
-FROM users
-WHERE username = 'alice';
-```
-
-This retrieves the matching user's username and role.
-
-### Filtering by a number
-
-```sql
-SELECT name, price
-FROM products
-WHERE price < 1000;
-```
-
-This retrieves products costing less than 1000.
-
-### Important distinction
-
-- `SELECT` determines which columns appear.
-- `FROM` identifies the source table.
-- `WHERE` determines which rows satisfy the condition.
-
----
-
-## 7. String Literals and Data Types
-
-A **string literal** is a text value written directly into a SQL statement.
-
-For example:
-
-```sql
-WHERE username = 'alice'
-```
-
-Here, `'alice'` is a string literal.
-
-A numeric comparison looks different:
-
-```sql
-WHERE price = 450
-```
-
-Here, `450` is a numeric literal.
+### Comparison operators
 
 Common comparison operators include:
 
 | Operator | Meaning |
 |---|---|
-| `=` | Equal to |
-| `<>` | Not equal to |
-| `>` | Greater than |
-| `<` | Less than |
-| `>=` | Greater than or equal to |
-| `<=` | Less than or equal to |
+| `=` | equal to |
+| `!=` or `<>` | not equal to |
+| `>` | greater than |
+| `<` | less than |
+| `>=` | greater than or equal to |
+| `<=` | less than or equal to |
 
-Example:
+### Boolean operators
 
-```sql
-SELECT username
-FROM users
-WHERE role <> 'admin';
-```
+- `AND` — the expression is true only when both conditions are true.
+- `OR` — the expression is true when at least one condition is true.
+- `NOT` — negates a condition.
 
-This retrieves users whose role is not equal to `admin`.
+For example, `1=1` is always true. Boolean expressions are important to SQL injection because changing an expression can broaden or otherwise alter which rows match a query.
 
-String comparison behavior, including case sensitivity, can vary by database and collation.
+Use parentheses when reasoning about complex Boolean expressions; they make grouping explicit. SQL's exact evaluation rules and dialect details can matter.
 
----
+### Strings and numbers
 
-## 8. Boolean Conditions
-
-A Boolean condition evaluates to true or false. SQL uses conditions to determine which rows satisfy a `WHERE` clause.
-
-Three important logical operators are `AND`, `OR`, and `NOT`.
-
-### AND
-
-`AND` requires both conditions to be true.
+Text values are commonly represented inside single quotes:
 
 ```sql
-SELECT name, price
-FROM products
-WHERE category = 'electronics'
-  AND price < 1000;
+WHERE category = 'Gifts'
 ```
 
-Result:
-
-| name | price |
-|---|---:|
-| Mouse | 600 |
-
-The product must belong to the electronics category and cost less than 1000.
-
-### OR
-
-`OR` requires at least one condition to be true.
+Numeric values are commonly written without quotes:
 
 ```sql
-SELECT username, role
-FROM users
-WHERE role = 'admin'
-   OR username = 'alice';
+WHERE released = 1
 ```
 
-This returns Charlie, because his role is `admin`, and Alice, because her username matches.
+The meaning of quote characters is important when examining how a query is constructed.
 
-### NOT
+## 4. What Is SQL Injection?
 
-`NOT` negates a condition.
+**SQL injection (SQLi)** is a vulnerability in which untrusted input is handled in a way that lets it alter the structure or meaning of an SQL statement.
 
-```sql
-SELECT username
-FROM users
-WHERE NOT active;
-```
+The key issue is not simply that input contains unusual characters. The issue is whether the application allows that input to be interpreted as part of the SQL program rather than as a data value.
 
-In a database that supports the Boolean column shown in the example, this returns users whose `active` value is false.
-
-### Combining conditions
-
-```sql
-SELECT name, price
-FROM products
-WHERE category = 'electronics'
-   OR (category = 'books' AND price < 500);
-```
-
-This selects electronics products, plus books costing less than 500.
-
-Parentheses make the intended grouping explicit.
-
-### Key distinction
+A useful mental model is:
 
 ```text
-AND → Both conditions must be true.
-OR  → At least one condition must be true.
-NOT → Negates a condition.
+User-controlled input
+        ↓
+Application builds a query
+        ↓
+Database parses the resulting SQL
+        ↓
+Query behaves differently than intended
 ```
 
-SQL also has three-valued logic involving `NULL`, so not every condition evaluates simply to true or false. That is a topic to study later.
+## 5. Unsafe Concatenation vs. Parameterized Queries
 
----
-
-## 9. How an Application Uses SQL
-
-Consider a fictional application that displays a user's profile.
-
-The application might execute a query conceptually equivalent to:
-
-```sql
-SELECT id, username, role
-FROM users
-WHERE username = 'alice';
-```
-
-The query retrieves the matching record, and the application uses the result to construct an HTTP response.
-
-A simplified flow is:
-
-```text
-User sends request
-        |
-        v
-Application processes input
-        |
-        v
-Application executes SQL query
-        |
-        v
-Database evaluates conditions
-        |
-        v
-Matching records are returned
-        |
-        v
-Application processes results
-        |
-        v
-HTTP response is generated
-```
-
-The application determines how input is handled and how returned records are used.
-
-This is important because a security problem can arise either from constructing an unsafe query or from failing to enforce the correct access permissions.
-
----
-
-## 10. SQL Injection: The Connection to Cybersecurity
-
-**SQL injection (SQLi)** occurs when untrusted input is interpreted as part of SQL syntax instead of being handled strictly as data.
-
-For example, an application might construct a query by concatenating a username into a string:
+### Unsafe: putting input directly into SQL
 
 ```python
+category = request_parameter
+
 query = (
-    "SELECT id, username FROM users "
-    "WHERE username = '" + username + "'"
+    "SELECT * FROM products WHERE category = '" + category +
+    "' AND released = 1"
 )
 ```
 
-This is unsafe because the application mixes SQL instructions with user-controlled input.
+The application joins SQL text and user-controlled input into one statement. If the input affects SQL syntax, it can change the query's logic.
 
-The fundamental problem is not merely that a user supplied unusual text. It is that the program constructed a database query in a way that may allow the input to change the query's meaning.
+### Safer: parameter binding
 
-### Use parameterized queries
+```python
+category = request_parameter
 
-A safer approach is to separate the SQL statement from its values.
+query = "SELECT * FROM products WHERE category = ? AND released = 1"
+cursor.execute(query, (category,))
+```
 
-For example, Python's `sqlite3` module supports parameterized queries:
+Here, the SQL statement and the category value are supplied separately. The database driver binds the value as data instead of treating it as newly supplied SQL syntax. The `?` placeholder is used by SQLite; other database drivers may use different placeholder formats.
+
+**Core principle:** use parameterized queries consistently. Do not rely on manually removing or escaping suspicious characters as the primary defense.
+
+## 6. Why Quotes, Boolean Conditions, and Comments Matter
+
+When input is concatenated into a quoted SQL expression, a quote may close the original string. The parser may then interpret subsequent input as SQL syntax.
+
+A Boolean expression such as `OR 1=1` is significant because `1=1` is always true. Depending on how the query is built, adding such a condition may weaken the original filter.
+
+Some SQL dialects use `--` to begin a line comment. A comment can cause the remainder of a query line to be ignored. Whether a comment works as expected depends on the database dialect and syntax context.
+
+These are parts of the mechanism—not universal payloads. Understand the query context and why the logic changes instead of memorizing strings.
+
+## 7. SQL Injection Can Subvert Application Logic
+
+Applications use SQL to implement decisions, not only to retrieve lists of data. For example, a query may help the application decide whether a login attempt corresponds to a user record.
+
+If user input can alter the query's intended logic, SQL injection may affect application behavior such as:
+
+- **Filtering data:** records outside the intended filter may be returned.
+- **Authentication:** a vulnerable login query may accept a request without correctly verifying the supplied credentials.
+- **Other database operations:** impact depends on the vulnerable query, database permissions, and application design.
+
+The important distinction is between the intended application rule and the query that is actually executed. If SQL input can modify the query, the database result may no longer represent the decision the developer intended.
+
+### Two completed learning examples
+
+The following are progress references only; their steps, payloads, request/response evidence, impact, and remediation are documented in separate lab reports.
+
+1. **Retrieving hidden data:** a vulnerable product category filter allowed unreleased products to be displayed.
+2. **Subverting application logic:** a vulnerable login function allowed authentication as the administrator without knowing the administrator's password.
+
+These examples use the same fundamental weakness—user input changing SQL logic—but demonstrate different consequences. The first bypasses a data filter; the second subverts an authentication decision.
+
+## 8. SQL Injection vs. Authorization
+
+SQL injection and broken authorization are different vulnerability classes.
+
+- **SQL injection:** input can alter the structure or meaning of an SQL query.
+- **Broken authorization:** the application fails to enforce what the current user is allowed to access or do.
+
+A parameterized query can prevent SQL injection in a query while the application still has an authorization flaw. For example, an application must separately check whether the logged-in user is allowed to view a particular private record.
+
+Authentication asks, **“Who are you?”** Authorization asks, **“What are you allowed to access or do?”** Neither is replaced by parameterization.
+
+## 9. Prevention and Defensive Practices
+
+1. **Use parameterized queries / prepared statements.** Keep SQL structure separate from user-supplied values.
+2. **Avoid dynamic SQL built from untrusted input.** If a query element cannot be represented by a bind parameter (such as a table or column name), use a strict allowlist of valid choices and construct the query safely.
+3. **Use least-privilege database accounts.** Limit what the application's database account can read or change.
+4. **Avoid disclosing unnecessary database errors.** Detailed errors can reveal implementation information.
+5. **Enforce authorization separately.** A safely parameterized query does not automatically prove that a user is permitted to access a record.
+6. **Test fixes.** Verify that intended results remain correct and that user input is still treated as data.
+
+## 10. PortSwigger SQL Injection Learning-Path Progress
+
+Learning path: [SQL injection](https://portswigger.net/web-security/learning-paths/sql-injection)
+
+- [x] **Retrieving hidden data — lab solved.** Separate lab report maintained.
+- [x] **Subverting application logic — completed on October 25, 2026.** Separate login-bypass lab report maintained.
+- [ ] **Next suggested section: SQL injection UNION attacks.**
+
+This checklist reflects the progress recorded in these notes; it is not a statement about the status displayed by PortSwigger's website.
+
+## 11. Quick Reference
+
+```sql
+-- Retrieve every row
+SELECT * FROM products;
+
+-- Filter by category
+SELECT * FROM products
+WHERE category = 'Gifts';
+
+-- Require both conditions
+SELECT * FROM products
+WHERE category = 'Gifts'
+AND released = 1;
+```
+
+Parameterized SQLite example:
 
 ```python
 cursor.execute(
-    "SELECT id, username, role FROM users WHERE username = ?",
-    (username,),
+    "SELECT * FROM products WHERE category = ? AND released = 1",
+    (category,)
 )
 ```
 
-The `?` is SQLite's parameter placeholder. The username is passed separately as data rather than concatenated into the SQL statement.
+## 12. Review Questions
 
-Placeholder syntax varies between database drivers, but the principle remains the same: **use parameterized queries rather than inserting untrusted values into SQL text.**
+Try answering these without looking back:
 
----
+1. What do `SELECT`, `FROM`, and `WHERE` do?
+2. What is the difference between string data and SQL syntax?
+3. Why is constructing SQL through string concatenation risky?
+4. Why can a Boolean condition such as `1=1` alter a vulnerable filter?
+5. How does parameter binding address the root cause of SQL injection?
+6. How does bypassing a product filter differ from bypassing a login decision?
+7. Why does using a parameterized query not eliminate the need for authorization checks?
+8. Why should database permissions follow the principle of least privilege?
 
-## 11. SQL Injection Prevention vs. Authorization
-
-These are separate security concerns.
-
-### Query safety
-
-Parameterized queries help ensure that user input is treated as a value rather than executable SQL syntax.
-
-### Access control
-
-Authorization determines whether the current user is allowed to access a particular resource or perform a particular action.
-
-Even a safely parameterized query can retrieve another user's data if the application uses the wrong identity or fails to check permissions.
-
-For example, an application should not assume that a user may access a private account merely because the request contains that account's identifier.
-
-Remember:
+## Core Mental Model
 
 ```text
-Parameterized query
-        |
-        v
-Helps prevent SQL injection
-
-Authorization check
-        |
-        v
-Helps prevent unauthorized access
+Input
+  ↓
+Application
+  ↓
+Query construction
+  ↓
+SQL parsing and execution
+  ↓
+Database result
+  ↓
+Application decision
 ```
 
-Secure applications need both.
-
----
-
-## 12. Practical Query Reference
-
-| Goal | SQL example |
-|---|---|
-| Retrieve all products | `SELECT * FROM products;` |
-| Retrieve product names | `SELECT name FROM products;` |
-| Retrieve names and prices | `SELECT name, price FROM products;` |
-| Find books | `SELECT * FROM products WHERE category = 'books';` |
-| Find inexpensive products | `SELECT * FROM products WHERE price < 500;` |
-| Find active ordinary users | `SELECT username FROM users WHERE role = 'user' AND active = TRUE;` |
-| Find administrators or Alice | `SELECT username FROM users WHERE role = 'admin' OR username = 'alice';` |
-| Exclude administrators | `SELECT username FROM users WHERE role <> 'admin';` |
-
-These examples use the fictional tables defined in this document. Exact syntax and supported types can differ between database systems.
-
----
-
-## 13. Key Takeaways
-
-1. A table stores related records, a row represents one record, and a column represents an attribute.
-2. `SELECT` specifies the columns requested.
-3. `FROM` specifies the table being queried.
-4. `WHERE` filters rows using conditions.
-5. String literals represent text values, commonly enclosed in single quotes.
-6. `AND`, `OR`, and `NOT` combine or negate logical conditions.
-7. SQL injection can occur when untrusted input is incorporated into SQL syntax unsafely.
-8. Parameterized queries help keep input separate from SQL instructions.
-9. Safe query construction does not replace authorization.
-10. A record's identifier does not itself grant permission to access that record.
-
-## 14. Review Questions
-
-Answer these without looking at the notes:
-
-1. What is the difference between a table, a row, and a column?
-2. What does `SELECT name FROM products` retrieve?
-3. What is the purpose of `WHERE`?
-4. What is the difference between `AND` and `OR`?
-5. What is a string literal?
-6. Why can concatenating untrusted input into an SQL statement be unsafe?
-7. How does a parameterized query help prevent SQL injection?
-8. Why can a parameterized query still expose another user's data if authorization is missing?
-
-**Final mental model:**
-
-```text
-Application input
-       |
-       v
-Safe query construction
-       |
-       v
-Database evaluates SQL
-       |
-       v
-Records are returned
-       |
-       v
-Application enforces access rules
-       |
-       v
-Appropriate response
-```
-
-Understanding this flow will prepare you for later work on SQL injection, authentication, access control, and secure backend development.
+Ask at each step: **Who controls this value? Is it data or executable structure? What decision depends on the result? What security control must still be enforced?**
 
 ---
